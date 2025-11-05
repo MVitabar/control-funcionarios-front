@@ -1,0 +1,88 @@
+name: EAS Build Android
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "EAS profile to use (development, preview, production)"
+        required: true
+        default: "preview"
+  push:
+    branches:
+      - main
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli@latest
+
+      - name: Login to Expo (using EXPO_TOKEN)
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          # login non-interactive so eas commands work
+          eas login --token $EXPO_TOKEN || true
+          eas whoami
+
+      - name: (Optional) Restore Android keystore from secret
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          echo "$KEYSTORE_B64" | base64 --decode > android.keystore
+          echo "Restored android.keystore (keystore file saved as android.keystore)."
+
+      - name: Run EAS build (non-interactive) and save JSON
+        id: eas_build
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          set -o pipefail
+          PROFILE="${{ github.event.inputs.profile || 'preview' }}"
+          echo "Starting EAS build with profile: $PROFILE"
+          # Run eas build and capture JSON output
+          eas build --platform android --profile "$PROFILE" --non-interactive --json > build-output.json || true
+          cat build-output.json
+          echo "::set-output name=buildjson::$(jq -c '.' build-output.json | sed 's/\"/\\\"/g')"
+
+      - name: Parse download URL and download artifact
+        if: always()
+        run: |
+          # read JSON and try to get artifact URL
+          build_json="$(cat build-output.json || true)"
+          if [ -z "$build_json" ]; then
+            echo "No build-output.json found — the build may have failed to start."
+            exit 0
+          fi
+          # Try to extract URL for Android artifact (apk or aab)
+          apk_url=$(echo "$build_json" | jq -r '.[] | select(.platform=="ANDROID") | .artifacts.applicationArchiveUrl' 2>/dev/null)
+          echo "artifact URL: $apk_url"
+          if [ -z "$apk_url" ] || [ "$apk_url" = "null" ]; then
+            echo "No artifact URL in build output. The build may be queued or still processing. Check the Expo dashboard."
+            exit 0
+          fi
+          curl -L -o app-build.android "$apk_url"
+          ls -lh app-build.android
+
+      - name: Upload APK / AAB artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: expo-artifact
+          path: app-build.android
