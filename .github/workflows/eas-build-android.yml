@@ -60,12 +60,35 @@ jobs:
           
           # Create build profile if it doesn't exist
           if [ ! -f ".eas/build/profiles.json" ]; then
-            echo '{"preview":{"android":{"buildType":"apk"},"ios":{"resourceClass":"m-medium"}},"production":{"android":{"buildType":"app-bundle"}}}' > .eas/build/profiles.json
+            echo '{
+              "preview": {
+                "android": {
+                  "buildType": "apk",
+                  "gradleCommand": ":app:assembleDebug"
+                },
+                "ios": {
+                  "resourceClass": "m-medium"
+                }
+              },
+              "production": {
+                "android": {
+                  "buildType": "app-bundle"
+                }
+              }
+            }' > .eas/build/profiles.json
           fi
           
           # Create build configuration if it doesn't exist
           if [ ! -f ".eas/build/config.json" ]; then
             echo '{"builds":{"android-preview":{"preview":{"android":{"buildType":"apk"}}}}}' > .eas/build/config.json
+          fi
+          
+          # Configure Android credentials
+          echo "Configuring Android credentials..."
+          if ! eas credentials --platform android; then
+            echo "Failed to configure Android credentials. You'll need to run 'eas credentials' locally first."
+            echo "Visit: https://docs.expo.dev/build-reference/android-credentials/"
+            exit 1
           fi
           
           echo "Project files:"
