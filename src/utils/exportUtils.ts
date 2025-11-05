@@ -483,7 +483,12 @@ export const exportToPDF = async (data: TimeEntry[], dateRange: { start: Date; e
 // Helper functions
 const formatDate = (date: string | Date): string => {
   try {
-    const d = typeof date === 'string' ? new Date(date) : date;
+    let d = typeof date === 'string' ? new Date(date) : new Date(date);
+    
+    // Ajustar a la zona horaria local
+    const timezoneOffset = d.getTimezoneOffset() * 60000;
+    d = new Date(d.getTime() + timezoneOffset);
+    
     if (isNaN(d.getTime())) return 'Data inválida';
     
     const day = d.getDate().toString().padStart(2, '0');

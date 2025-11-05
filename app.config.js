@@ -14,9 +14,6 @@ module.exports = {
     resizeMode: 'contain',
     backgroundColor: '#ffffff'
   },
-  updates: {
-    fallbackToCacheTimeout: 0
-  },
   assetBundlePatterns: ['**/*'],
   ios: {
     supportsTablet: true
@@ -44,6 +41,20 @@ module.exports = {
   },
   web: {
     favicon: './assets/images/favicon.png'
+  },
+  updates: {
+    url: 'https://u.expo.dev/a651b883-14e9-42ff-bac1-7a20de320c88',
+    enabled: true,
+    checkAutomatically: 'ON_LOAD',
+    fallbackToCacheTimeout: 0,
+    // codeSigningCertificate: './code-signing/certificate.pem',
+    // codeSigningMetadata: {
+    //   keyid: 'main',
+    //   alg: 'rsa-v1_5-sha256'
+    // }
+  },
+  runtimeVersion: {
+    policy: 'appVersion'
   },
   extra: {
     eas: {

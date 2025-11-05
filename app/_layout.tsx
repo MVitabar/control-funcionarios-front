@@ -3,10 +3,11 @@ import * as Navigation from '@react-navigation/native';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
+import * as Updates from 'expo-updates';
 import { StatusBar } from 'expo-status-bar';
 import * as React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Platform, View, SafeAreaView, StatusBar as RNStatusBar } from 'react-native';
+import { ActivityIndicator, Platform, View, SafeAreaView, StatusBar as RNStatusBar, Alert } from 'react-native';
 import 'react-native-reanimated';
 import { useColorScheme } from '../src/hooks/use-color-scheme';
 import { useAuth } from '../src/hooks/useAuth';
@@ -187,8 +188,43 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
 }
 
 // Componente principal
+async function checkForUpdates() {
+  if (__DEV__) {
+    return; // No verificar actualizaciones en desarrollo
+  }
+
+  try {
+    const update = await Updates.checkForUpdateAsync();
+    
+    if (update.isAvailable) {
+      await Updates.fetchUpdateAsync();
+      // Notificar al usuario que se instalará una actualización
+      Alert.alert(
+        'Actualización disponible',
+        'Se ha descargado una actualización. La aplicación se reiniciará para aplicar los cambios.',
+        [
+          {
+            text: 'Reiniciar ahora',
+            onPress: async () => {
+              await Updates.reloadAsync();
+            },
+          },
+        ],
+        { cancelable: false }
+      );
+    }
+  } catch (error) {
+    console.error('Error al verificar actualizaciones:', error);
+  }
+}
+
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  
+  // Verificar actualizaciones al montar el componente
+  useEffect(() => {
+    checkForUpdates();
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
