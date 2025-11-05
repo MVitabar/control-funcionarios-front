@@ -43,6 +43,14 @@ jobs:
           # login non-interactive so eas commands work
           eas login --token $EXPO_TOKEN || true
           eas whoami
+          
+      - name: Initialize EAS project
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          # Initialize EAS project non-interactively
+          echo '{"projectId":"control-funcionarios"}' > eas.json
+          eas init --non-interactive --id control-funcionarios
 
       - name: Run EAS build (non-interactive) and save JSON
         id: eas_build
