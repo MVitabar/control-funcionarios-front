@@ -48,15 +48,25 @@ jobs:
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
-          # Create .eas directory if it doesn't exist
-          mkdir -p .eas
+          # Initialize EAS project with the provided ID
+          echo "Setting up EAS project..."
           
-          # Create project.json with the provided project ID
+          # Create .eas directory and project.json
+          mkdir -p .eas
           echo '{"projectId":"a651b883-14e9-42ff-bac1-7a20de320c88"}' > .eas/project.json
           
-          # Verify the project is linked
+          # Create app.json if it doesn't exist
+          if [ ! -f "app.json" ]; then
+            echo '{"expo":{"name":"control-funcionarios","slug":"control-funcionarios"}}' > app.json
+          fi
+          
+          # Configure EAS project
+          eas build:configure
+          
           echo "Project configuration:"
           cat .eas/project.json
+          echo "\napp.json:"
+          cat app.json
 
       - name: Run EAS build (non-interactive) and save JSON
         id: eas_build
