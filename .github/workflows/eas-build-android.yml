@@ -44,18 +44,19 @@ jobs:
           eas login --token $EXPO_TOKEN || true
           eas whoami
           
-      - name: Configure EAS project
+      - name: Setup EAS project
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
-          # Verify eas.json exists
-          if [ ! -f "eas.json" ]; then
-            echo "Error: eas.json not found in the project root"
-            exit 1
-          fi
+          # Create .eas directory if it doesn't exist
+          mkdir -p .eas
           
-          # Link the project with EAS
-          eas project:link --id control-funcionarios
+          # Create project.json with the provided project ID
+          echo '{"projectId":"a651b883-14e9-42ff-bac1-7a20de320c88"}' > .eas/project.json
+          
+          # Verify the project is linked
+          echo "Project configuration:"
+          cat .eas/project.json
 
       - name: Run EAS build (non-interactive) and save JSON
         id: eas_build
