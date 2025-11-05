@@ -26,11 +26,16 @@ jobs:
           node-version: 18
           cache: "npm"
 
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
       - name: Install dependencies
-        run: npm ci
+        run: bun install --frozen-lockfile
 
       - name: Install EAS CLI
-        run: npm install -g eas-cli@latest
+        run: bun add -g eas-cli@latest
 
       - name: Login to Expo (using EXPO_TOKEN)
         env:
@@ -49,9 +54,18 @@ jobs:
           PROFILE="${{ github.event.inputs.profile || 'preview' }}"
           echo "Starting EAS build with profile: $PROFILE"
           # Run eas build and capture JSON output
-          eas build --platform android --profile "$PROFILE" --non-interactive --json > build-output.json || true
-          cat build-output.json
-          echo "::set-output name=buildjson::$(jq -c '.' build-output.json | sed 's/\"/\\\"/g')"
+          BUILD_OUTPUT=$(eas build --platform android --profile "$PROFILE" --non-interactive --json) || true
+          echo "$BUILD_OUTPUT" > build-output.json
+          echo "Build output saved to build-output.json"
+          
+          # Check if we got valid JSON output
+          if jq -e . >/dev/null 2>&1 <<<"$BUILD_OUTPUT"; then
+            echo "Valid JSON output received"
+            echo "::set-output name=buildjson::$(echo "$BUILD_OUTPUT" | jq -c . | sed 's/\"/\\\\\"/g')"
+          else
+            echo "No valid JSON output from EAS build command"
+            echo "::set-output name=buildjson::{}"
+          fi
 
       - name: Parse download URL and download artifact
         if: always()
