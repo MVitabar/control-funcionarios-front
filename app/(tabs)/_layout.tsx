@@ -2,19 +2,15 @@ import { Stack } from 'expo-router';
 
 export default function TabLayout() {
   return (
-    <Stack>
-      <Stack.Screen 
-        name="index" 
-        options={{ headerShown: false }} 
-      />
-      <Stack.Screen 
-        name="schedule" 
-        options={{ 
-          title: 'Horarios',
-          headerShown: true,
-          headerBackTitle: 'Atrás',
-        }} 
-      />
+    <Stack
+      screenOptions={{
+        headerShown: false,
+      }}
+    >
+      <Stack.Screen name="index" />
+      <Stack.Screen name="schedule" />
+      <Stack.Screen name="add-employee" />
+      <Stack.Screen name="time-entry/[employeeId]" />
     </Stack>
   );
 }

@@ -6,7 +6,7 @@ import * as SecureStore from 'expo-secure-store';
 import { StatusBar } from 'expo-status-bar';
 import * as React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Platform, View } from 'react-native';
+import { ActivityIndicator, Platform, View, SafeAreaView, StatusBar as RNStatusBar } from 'react-native';
 import 'react-native-reanimated';
 import { useColorScheme } from '../src/hooks/use-color-scheme';
 import { useAuth } from '../src/hooks/useAuth';
@@ -194,19 +194,68 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
         <AuthProvider>
-          <Stack>
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+          <SafeAreaView style={{ 
+            flex: 1, 
+            paddingTop: Platform.OS === 'android' ? RNStatusBar.currentHeight : 0,
+            paddingBottom: Platform.OS === 'android' ? 6 : 0
+          }}>
+          <Stack 
+            screenOptions={{
+              headerShown: false,
+              animation: 'fade',
+              animationDuration: 200,
+            }}
+          >
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="(auth)" />
             <Stack.Screen 
               name="employee-time-entries" 
               options={{ 
+                headerShown: false,
                 title: 'Registros del Empleado',
-                headerBackTitle: 'Atrás'
+                headerBackTitle: 'Atrás',
+                headerTitle: () => null,
               }} 
             />
-            <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+            <Stack.Screen 
+              name="modal" 
+              options={{ 
+                headerShown: false,
+                presentation: 'modal', 
+                title: 'Modal',
+                headerTitle: () => null,
+              }} 
+            />
+            <Stack.Screen 
+              name="time-entry/[employeeId]" 
+              options={{
+                headerShown: false,
+                title: 'Registro de Tiempo',
+                headerBackTitle: 'Atrás',
+                headerTitle: () => null,
+              }}
+            />
+            <Stack.Screen 
+              name="(tabs)/schedule" 
+              options={{
+                headerShown: false,
+                title: 'Horarios',
+                headerBackTitle: 'Atrás',
+                headerTitle: () => null,
+              }}
+            />
+            <Stack.Screen 
+              name="(tabs)/add-employee" 
+              options={{
+                headerShown: false,
+                title: 'Agregar Empleado',
+                headerBackTitle: 'Atrás',
+                headerTitle: () => null,
+              }}
+            />
           </Stack>
-          <StatusBar style="auto" />
+            <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} backgroundColor="transparent" translucent />
+          </SafeAreaView>
         </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>
