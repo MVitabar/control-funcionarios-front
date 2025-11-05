@@ -1,5 +1,10 @@
 {
   "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "a651b883-14e9-42ff-bac1-7a20de320c88"
+      }
+    },
     "name": "control-funcionarios",
     "slug": "control-funcionarios",
     "version": "1.0.0",

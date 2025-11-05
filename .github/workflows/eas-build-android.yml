@@ -50,33 +50,24 @@ jobs:
         run: |
           echo "Setting up EAS project..."
           
-          # Create .eas directory and project.json
+          # Initialize EAS project with the provided ID
+          echo '{"id": "a651b883-14e9-42ff-bac1-7a20de320c88"}' > app.config.js
+          
+          # Create .eas directory if it doesn't exist
           mkdir -p .eas
           
-          # Create project.json with the provided project ID
-          cat > .eas/project.json <<EOL
-          {
-            "projectId": "a651b883-14e9-42ff-bac1-7a20de320c88",
-            "projectDir": "$GITHUB_WORKSPACE"
-          }
-          EOL
+          # Create minimal project.json
+          echo '{"projectId": "a651b883-14e9-42ff-bac1-7a20de320c88"}' > .eas/project.json
           
-          # Create build profile configuration
+          # Create build profile
           mkdir -p .eas/build
-          cat > .eas/build/profile.preview.json <<EOL
-          {
-            "android": {
-              "buildType": "apk"
-            },
-            "distribution": "internal",
-            "env": {}
-          }
-          EOL
+          echo '{"preview":{"android":{"buildType":"apk"}}}' > .eas/build/profiles.json
           
-          echo "Project configuration:"
-          cat .eas/project.json
-          echo -e "\nBuild profile:"
-          cat .eas/build/profile.preview.json
+          # Create build configuration
+          echo '{"builds":{"android-preview":{"preview":{"android":{"buildType":"apk"}}}}}' > .eas/build/config.json
+          
+          echo "Project files created:"
+          ls -la .eas/ .eas/build/
 
       - name: Run EAS build (non-interactive) and save JSON
         id: eas_build
