@@ -40,14 +40,6 @@ jobs:
           eas login --token $EXPO_TOKEN || true
           eas whoami
 
-      - name: (Optional) Restore Android keystore from secret
-        if: ${{ github.event_name == 'workflow_dispatch' && secrets.ANDROID_KEYSTORE_BASE64 != '' }}
-        env:
-          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-        run: |
-          echo "$KEYSTORE_B64" | base64 --decode > android.keystore
-          echo "Restored android.keystore (keystore file saved as android.keystore)."
-
       - name: Run EAS build (non-interactive) and save JSON
         id: eas_build
         env:
