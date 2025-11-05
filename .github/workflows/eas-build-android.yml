@@ -52,13 +52,31 @@ jobs:
           
           # Create .eas directory and project.json
           mkdir -p .eas
-          echo '{"projectId":"a651b883-14e9-42ff-bac1-7a20de320c88"}' > .eas/project.json
           
-          # Skip interactive prompt for existing project
-          echo "y" | eas build:configure || true
+          # Create project.json with the provided project ID
+          cat > .eas/project.json <<EOL
+          {
+            "projectId": "a651b883-14e9-42ff-bac1-7a20de320c88",
+            "projectDir": "$GITHUB_WORKSPACE"
+          }
+          EOL
+          
+          # Create build profile configuration
+          mkdir -p .eas/build
+          cat > .eas/build/profile.preview.json <<EOL
+          {
+            "android": {
+              "buildType": "apk"
+            },
+            "distribution": "internal",
+            "env": {}
+          }
+          EOL
           
           echo "Project configuration:"
           cat .eas/project.json
+          echo -e "\nBuild profile:"
+          cat .eas/build/profile.preview.json
 
       - name: Run EAS build (non-interactive) and save JSON
         id: eas_build
