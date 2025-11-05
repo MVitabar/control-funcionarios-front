@@ -6,10 +6,10 @@ type EnvConfig = {
   // Add other environment variables here as needed
 };
 
-// Default configuration (development)
+// Default configuration (production)
 const ENV: EnvConfig = {
-  API_URL: 'http://localhost:3000',
-  NODE_ENV: 'development',
+  API_URL: 'https://control-funcionarios-production.up.railway.app',
+  NODE_ENV: 'production',
   // Add other default values here
 };
 

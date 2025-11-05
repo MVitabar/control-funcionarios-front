@@ -120,8 +120,8 @@ jobs:
             echo "::set-output name=buildjson::{}"
           fi
 
-      - name: Parse build output and download artifact
-        if: always()
+      - name: Download build artifact
+        id: download_artifact
         run: |
           # Read build output JSON
           if [ ! -f "build-output.json" ]; then
@@ -129,8 +129,16 @@ jobs:
             exit 0
           fi
           
-          build_json=$(cat build-output.json)
-          echo "Build output JSON content:"
+          # Extract the JSON part from the build output
+          build_json=$(grep -o '\[\s*{.*}\s*\]' build-output.json || true)
+          
+          if [ -z "$build_json" ]; then
+            echo "Could not parse build output JSON. Showing full output:"
+            cat build-output.json
+            exit 0
+          fi
+          
+          echo "Extracted build JSON:"
           echo "$build_json"
           
           # Try to extract URL for Android artifact (apk or aab)
@@ -150,17 +158,23 @@ jobs:
           echo "Downloading artifact from: $artifact_url"
           mkdir -p build-artifacts
           
-          # Download the artifact with a proper file extension
-          if [[ "$artifact_url" == *.apk ]]; then
-            artifact_path="build-artifacts/app-build.apk"
-          elif [[ "$artifact_url" == *.aab ]]; then
-            artifact_path="build-artifacts/app-bundle.aab"
-          else
-            # If we can't determine the type, use a generic name
-            artifact_path="build-artifacts/app-build"
-          fi
+          # Always use .apk extension for the download
+          artifact_path="build-artifacts/app-build-$(date +%Y%m%d-%H%M%S).apk"
           
-          curl -L -o "$artifact_path" "$artifact_url"
+          # Download with retries
+          max_retries=3
+          for i in $(seq 1 $max_retries); do
+            if curl -L -o "$artifact_path" "$artifact_url"; then
+              break
+            fi
+            echo "Download attempt $i failed, retrying..."
+            sleep 5
+          done
+          
+          if [ ! -f "$artifact_path" ]; then
+            echo "Failed to download artifact after $max_retries attempts"
+            exit 1
+          fi
           
           # List downloaded artifacts
           echo "Downloaded artifacts:"
