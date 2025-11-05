@@ -1,98 +1,382 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View, ViewStyle } from 'react-native';
+import { EmployeeCard } from '../../components/employee-card';
+import { ThemedText } from '../../components/themed-text';
+import { Colors } from '../../constants/theme';
+import { useColorScheme } from '../../src/hooks/use-color-scheme';
+import { useAuth } from '../../src/hooks/useAuth';
+import { Employee, employeeService } from '../../src/services/employeeService';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+interface StatItem {
+  title: string;
+  value: string;
+  icon: string;
+  color: string;
+}
 
-export default function HomeScreen() {
+// Interfaz eliminada ya que no se está utilizando
+
+export default function DashboardScreen() {
+  const { user } = useAuth();
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme ?? 'light'];
+  const router = useRouter();
+  
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  
+  // Estilos que dependen del tema
+  const dynamicStyles = StyleSheet.create({
+    header: {
+      backgroundColor: colors.primary,
+      padding: 24,
+      borderBottomLeftRadius: 24,
+      borderBottomRightRadius: 24,
+      marginBottom: 24,
+      boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+      elevation: 3,
+    },
+    greeting: {
+      fontSize: 16,
+      color: 'rgba(255, 255, 255, 0.9)',
+      marginBottom: 4,
+    },
+    userName: {
+      fontSize: 24,
+      fontWeight: '700',
+      color: '#fff',
+      marginBottom: 4,
+    },
+    welcomeText: {
+      fontSize: 14,
+      color: 'rgba(255, 255, 255, 0.8)',
+    },
+    quickActionButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 14,
+      borderRadius: 12,
+      flex: 1,
+      backgroundColor: colors.primary,
+    },
+  });
+  
+  const loadEmployees = async () => {
+    try {
+      const data = await employeeService.getEmployees();
+      setEmployees(data);
+    } catch (error) {
+      console.error('Error al cargar empleados:', error);
+      // Mostrar mensaje de error al usuario
+    } finally {
+      setIsLoading(false);
+      setRefreshing(false);
+    }
+  };
+  
+  const handleRefresh = () => {
+    setRefreshing(true);
+    loadEmployees();
+  };
+  
+  useEffect(() => {
+    loadEmployees();
+  }, []);
+  
+  // Dados de estatísticas
+  const stats: StatItem[] = [
+    { 
+      title: 'Funcionários', 
+      value: employees.length.toString(), 
+      icon: 'people-outline',
+      color: '#4CAF50'
+    },
+    { 
+      title: 'Ativos', 
+      value: employees.filter(e => e.isActive).length.toString(), 
+      icon: 'checkmark-circle-outline',
+      color: '#2196F3'
+    },
+    { 
+      title: 'Inativos', 
+      value: employees.filter(e => !e.isActive).length.toString(), 
+      icon: 'close-circle-outline',
+      color: '#9E9E9E'
+    },
+  ];
+
+  // Interfaz QuickAction eliminada ya que no se está utilizando
+// interface QuickAction {
+//   title: string;
+//   icon: string;
+//   onPress: () => void;
+// }
+
+  // Función eliminada ya que no se está utilizando
+
+  // Eliminadas las variables no utilizadas
+  // const actionsContainerStyle: ViewStyle = {
+  //   flexDirection: 'row',
+  //   flexWrap: 'wrap',
+  //   gap: 12,
+  //   marginBottom: 24,
+  //   paddingHorizontal: 16,
+  // };
+
+  // Estilo para el contenedor de la tarjeta de estadísticas
+  const statCard: ViewStyle = {
+    flex: 1,
+    minWidth: '100%',
+    maxWidth: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
+    marginBottom: 12,
+    marginHorizontal: 4,
+  };
+
+  // Estilos en línea para la tarjeta de actividades
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <ScrollView 
+        style={[styles.scrollView, { backgroundColor: colors.background }]}
+        contentContainerStyle={styles.scrollViewContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
+          />
+        }
+      >
+        {/* Encabezado */}
+        <View style={dynamicStyles.header}>
+          <View>
+            <ThemedText style={dynamicStyles.greeting}>Bem-vindo de volta,</ThemedText>
+            <ThemedText style={dynamicStyles.userName}>{user?.name || 'Usuário'}</ThemedText>
+            <ThemedText style={dynamicStyles.welcomeText}>Estamos felizes em vê-lo novamente</ThemedText>
+          </View>
+        </View>
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+        {/* Estadísticas */}
+        <ThemedText style={styles.sectionTitle}>Resumo</ThemedText>
+        <View style={styles.statsContainer}>
+          {stats.map((stat, index) => (
+            <View 
+              key={index} 
+              style={[
+                statCard, 
+                { 
+                  backgroundColor: colors.card,
+                  borderLeftWidth: 4,
+                  borderLeftColor: stat.color,
+                  marginRight: index < stats.length - 1 ? 12 : 0 
+                }
+              ]}
+            >
+              <View style={{
+                width: 48,
+                height: 48,
+                borderRadius: 12,
+                justifyContent: 'center',
+                alignItems: 'center',
+                marginRight: 16,
+              }}>
+                <Ionicons name={stat.icon as any} size={32} color={stat.color} />
+              </View>
+              <View style={styles.statTextContainer}>
+                <ThemedText style={[styles.statValue, { color: colors.text, fontSize: 22, fontWeight: '700', marginBottom: 2 }]}>{stat.value}</ThemedText>
+                <ThemedText style={[styles.statTitle, { color: colors.secondaryText, fontSize: 13, opacity: 0.8 }]}>{stat.title}</ThemedText>
+              </View>
+            </View>
+          ))}
+        </View>
+
+        {/* Acciones Rápidas */}
+        <ThemedText style={styles.sectionTitle}>Ações Rápidas</ThemedText>
+        <View style={styles.quickActionsContainer}>
+          <TouchableOpacity 
+            style={[dynamicStyles.quickActionButton, { backgroundColor: colors.primary }]}
+            onPress={() => router.push({
+              pathname: '/(tabs)/add-employee'
+            } as any)}
+          >
+            <Ionicons name="person-add-outline" size={20} color="#fff" />
+            <ThemedText style={styles.quickActionButtonText}>Novo Funcionário</ThemedText>
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[dynamicStyles.quickActionButton, { backgroundColor: '#6c5ce7' }]}
+            onPress={() => router.push({
+              pathname: '/(tabs)/schedule'
+            } as any)}
+          >
+            <Ionicons name="time-outline" size={20} color="#fff" />
+            <ThemedText style={styles.quickActionButtonText}>Registrar Hora</ThemedText>
+          </TouchableOpacity>
+        </View>
+
+        {/* Lista de Empleados */}
+        <ThemedText style={styles.sectionTitle}>Funcionários</ThemedText>
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+          </View>
+        ) : employees.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Ionicons 
+              name="people-outline" 
+              size={48} 
+              color={colors.secondaryText}
+              style={{ opacity: 0.5, marginBottom: 16 }}
+            />
+            <ThemedText style={[styles.emptyText, { color: colors.secondaryText }]}>
+              Nenhum funcionário cadastrado
+            </ThemedText>
+            <TouchableOpacity 
+              style={[styles.addButton, { backgroundColor: colors.primary }]}
+              onPress={() => router.push({
+              pathname: '/(tabs)/add-employee'
+            } as any)}
+            >
+              <Ionicons name="add" size={20} color="#fff" />
+              <ThemedText style={styles.addButtonText}>Adicionar Funcionário</ThemedText>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.employeeList}>
+            {employees.map((employee) => (
+              <EmployeeCard
+                key={employee._id}
+                name={employee.name}
+                status={employee.isActive ? 'active' : 'inactive'}
+                onPress={() => router.push({
+                  pathname: '/(tabs)/time-entry/[employeeId]',
+                  params: { employeeId: employee._id }
+                } as any)}
+              />
+            ))}
+          </View>
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
+  container: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollViewContent: {
+    padding: 16,
+    paddingBottom: 32,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 16,
+    color: '#333',
+  },
+  statsContainer: {
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  statsScrollView: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  quickActionsContainer: {
+    flexDirection: 'row',
+    marginBottom: 24,
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  quickActionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'center',
+    padding: 14,
+    borderRadius: 12,
+    flex: 1,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  quickActionButtonText: {
+    color: '#fff',
+    marginLeft: 8,
+    fontWeight: '600',
+    fontSize: 15,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 40,
+    backgroundColor: 'rgba(0,0,0,0.02)',
+    borderRadius: 12,
+  },
+  emptyText: {
+    textAlign: 'center',
+    marginBottom: 24,
+    fontSize: 16,
+    color: '#666',
+  },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#4CAF50',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+  },
+  addButtonText: {
+    color: '#fff',
+    marginLeft: 8,
+    fontWeight: '600',
+  },
+  employeeList: {
+    gap: 12,
+  },
+  statTextContainer: {
+    flex: 1,
+  },
+  statValue: {
+    fontSize: 22,
+    fontWeight: '700',
+    marginBottom: 2,
+  },
+  statTitle: {
+    fontSize: 13,
+    opacity: 0.8,
+  },
+  fab: {
     position: 'absolute',
+    right: 20,
+    bottom: 30,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 6,
+    zIndex: 10,
   },
 });
