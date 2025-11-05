@@ -50,24 +50,30 @@ jobs:
         run: |
           echo "Setting up EAS project..."
           
-          # Initialize EAS project with the provided ID
-          echo '{"id": "a651b883-14e9-42ff-bac1-7a20de320c88"}' > app.config.js
-          
           # Create .eas directory if it doesn't exist
-          mkdir -p .eas
-          
-          # Create minimal project.json
-          echo '{"projectId": "a651b883-14e9-42ff-bac1-7a20de320c88"}' > .eas/project.json
-          
-          # Create build profile
           mkdir -p .eas/build
-          echo '{"preview":{"android":{"buildType":"apk"}}}' > .eas/build/profiles.json
           
-          # Create build configuration
-          echo '{"builds":{"android-preview":{"preview":{"android":{"buildType":"apk"}}}}}' > .eas/build/config.json
+          # Create project.json if it doesn't exist
+          if [ ! -f ".eas/project.json" ]; then
+            echo '{"projectId": "a651b883-14e9-42ff-bac1-7a20de320c88"}' > .eas/project.json
+          fi
           
-          echo "Project files created:"
-          ls -la .eas/ .eas/build/
+          # Create build profile if it doesn't exist
+          if [ ! -f ".eas/build/profiles.json" ]; then
+            echo '{"preview":{"android":{"buildType":"apk"},"ios":{"resourceClass":"m-medium"}},"production":{"android":{"buildType":"app-bundle"}}}' > .eas/build/profiles.json
+          fi
+          
+          # Create build configuration if it doesn't exist
+          if [ ! -f ".eas/build/config.json" ]; then
+            echo '{"builds":{"android-preview":{"preview":{"android":{"buildType":"apk"}}}}}' > .eas/build/config.json
+          fi
+          
+          echo "Project files:"
+          ls -la .eas/ .eas/build/ 2>/dev/null || true
+          
+          # Verify expo config
+          echo "Verifying Expo config..."
+          npx expo config --json > /dev/null || echo "Warning: expo config check failed"
 
       - name: Run EAS build (non-interactive) and save JSON
         id: eas_build
@@ -78,7 +84,11 @@ jobs:
           PROFILE="${{ github.event.inputs.profile || 'preview' }}"
           echo "Starting EAS build with profile: $PROFILE"
           # Run eas build and capture JSON output
-          BUILD_OUTPUT=$(eas build --platform android --profile "$PROFILE" --non-interactive --json) || true
+          echo "Running EAS build..."
+          BUILD_OUTPUT=$(eas build --platform android --profile "$PROFILE" --non-interactive --json 2>&1) || {
+            echo "EAS build command failed, but continuing to process output..."
+            echo "Build output: $BUILD_OUTPUT"
+          }
           echo "$BUILD_OUTPUT" > build-output.json
           echo "Build output saved to build-output.json"
           
