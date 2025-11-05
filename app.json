@@ -13,6 +13,15 @@
     "scheme": "controlfuncionarios",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "updates": {
+      "url": "https://u.expo.dev/a651b883-14e9-42ff-bac1-7a20de320c88",
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "ios": {
       "bundleIdentifier": "com.tudominio.controlfuncionarios",
       "supportsTablet": true

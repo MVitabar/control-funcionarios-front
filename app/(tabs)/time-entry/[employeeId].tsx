@@ -64,15 +64,23 @@ export default function TimeEntryScreen() {
   const [showTimePicker, setShowTimePicker] = useState<{entry: boolean, exit: boolean}>({entry: false, exit: false});
   
 
-  // Obtener la fecha actual en la zona horaria local del navegador
+  // Obtener la fecha actual en formato YYYY-MM-DD
   const getCurrentDate = () => {
-    return new Date();
+    // Usar la fecha actual del sistema
+    const now = new Date();
+    // Ajustar a la zona horaria local
+    const localDate = new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
+    const year = localDate.getFullYear();
+    const month = String(localDate.getMonth() + 1).padStart(2, '0');
+    const day = String(localDate.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
 
   const [formData, setFormData] = useState<TimeEntryForm>(() => {
     const today = getCurrentDate();
+    console.log('Fecha actual al iniciar:', today);
     return {
-      date: format(today, 'yyyy-MM-dd'),
+      date: today,
       entryTime: '',
       exitTime: '',
       dailyRate: '',
@@ -86,6 +94,16 @@ export default function TimeEntryScreen() {
   const [extraHoursInput, setExtraHoursInput] = useState('00:00');
 
   const [employee, setEmployee] = useState<Employee | null>(null);
+
+  // Inicializar la fecha al montar el componente
+  useEffect(() => {
+    const today = getCurrentDate();
+    console.log('Fecha actual forzada:', today);
+    setFormData(prev => ({
+      ...prev,
+      date: today
+    }));
+  }, []);
 
   // Carregar dados do funcionário
   useEffect(() => {
@@ -125,8 +143,21 @@ export default function TimeEntryScreen() {
 
   const handleDateChange = (event: any, selectedDate?: Date) => {
     setShowDatePicker(false);
+    
     if (selectedDate) {
-      setFormData({...formData, date: format(selectedDate, 'yyyy-MM-dd')});
+      // Usar una fecha fija para asegurar consistencia
+      const fixedDate = new Date(selectedDate);
+      const year = fixedDate.getFullYear();
+      const month = String(fixedDate.getMonth() + 1).padStart(2, '0');
+      const day = String(fixedDate.getDate()).padStart(2, '0');
+      const formattedDate = `${year}-${month}-${day}`;
+      
+      console.log('Fecha seleccionada:', formattedDate);
+      
+      setFormData(prev => ({
+        ...prev, 
+        date: formattedDate
+      }));
     }
   };
 
@@ -400,11 +431,16 @@ export default function TimeEntryScreen() {
       {/* Date Picker */}
       {showDatePicker && (
         <DateTimePicker
-          value={new Date(formData.date)}
+          value={formData.date ? 
+            new Date(formData.date + 'T12:00:00') : 
+            new Date()
+          }
           mode="date"
           display="spinner"
           onChange={handleDateChange}
           locale="pt-BR"
+          minimumDate={new Date(2020, 0, 1)}
+          maximumDate={new Date(2030, 11, 31)}
         />
       )}
 

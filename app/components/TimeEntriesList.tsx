@@ -91,17 +91,30 @@ const TimeEntriesList: React.FC<TimeEntriesListProps> = ({ employeeId }) => {
     fetchEmployees();
   }, [fetchEntries, fetchEmployees]);
 
-  const formatTime = (timeString: string) => {
+  const formatTime = (dateString: string | Date) => {
     try {
-      // Extrair a hora diretamente da string (assumindo formato 'HH:mm' ou 'HH:mm:ss')
-      const timePart = timeString.split('T')[1]?.split('.')[0] || timeString;
-      const [hours, minutes] = timePart.split(':');
-      
-      // Formatar para HH:mm
-      return `${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}`;
+      const date = new Date(dateString);
+      // Ajustar a la zona horaria local
+      const localDate = new Date(date.getTime() + (date.getTimezoneOffset() * 60000));
+      const hours = String(localDate.getHours()).padStart(2, '0');
+      const minutes = String(localDate.getMinutes()).padStart(2, '0');
+      return `${hours}:${minutes}`;
     } catch (error) {
       console.error('Erro ao formatar hora:', error);
       return '--:--';
+    }
+  };
+
+  // Función para formatear fechas teniendo en cuenta la zona horaria
+  const formatDate = (dateString: string | Date) => {
+    try {
+      const date = new Date(dateString);
+      // Ajustar a la zona horaria local
+      const localDate = new Date(date.getTime() + (date.getTimezoneOffset() * 60000));
+      return format(localDate, 'dd/MM/yyyy', { locale: ptBR });
+    } catch (error) {
+      console.error('Error al formatear fecha:', error);
+      return '--/--/----';
     }
   };
 
@@ -126,7 +139,7 @@ const TimeEntriesList: React.FC<TimeEntriesListProps> = ({ employeeId }) => {
         <View style={styles.detailRow}>
           <Text style={styles.detailLabel}>Data:</Text>
           <Text style={styles.detailValue}>
-            {format(new Date(item.date), 'dd/MM/yyyy', { locale: ptBR })}
+            {formatDate(item.date)}
           </Text>
         </View>
         
