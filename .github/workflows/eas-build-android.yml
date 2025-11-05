@@ -91,28 +91,63 @@ jobs:
             echo "::set-output name=buildjson::{}"
           fi
 
-      - name: Parse download URL and download artifact
+      - name: Parse build output and download artifact
         if: always()
         run: |
-          # read JSON and try to get artifact URL
-          build_json="$(cat build-output.json || true)"
-          if [ -z "$build_json" ]; then
+          # Read build output JSON
+          if [ ! -f "build-output.json" ]; then
             echo "No build-output.json found — the build may have failed to start."
             exit 0
           fi
+          
+          build_json=$(cat build-output.json)
+          echo "Build output JSON content:"
+          echo "$build_json"
+          
           # Try to extract URL for Android artifact (apk or aab)
-          apk_url=$(echo "$build_json" | jq -r '.[] | select(.platform=="ANDROID") | .artifacts.applicationArchiveUrl' 2>/dev/null)
-          echo "artifact URL: $apk_url"
-          if [ -z "$apk_url" ] || [ "$apk_url" = "null" ]; then
+          artifact_url=$(echo "$build_json" | jq -r '.[] | select(.platform=="ANDROID") | .artifacts.applicationArchiveUrl // empty' 2>/dev/null)
+          
+          if [ -z "$artifact_url" ] || [ "$artifact_url" = "null" ]; then
             echo "No artifact URL in build output. The build may be queued or still processing. Check the Expo dashboard."
+            # Try to get build ID to provide a direct link
+            build_id=$(echo "$build_json" | jq -r '.[0].id // empty' 2>/dev/null)
+            if [ -n "$build_id" ]; then
+              echo "Build ID: $build_id"
+              echo "Check build status at: https://expo.dev/accounts/martinvitabar/projects/control-funcionarios/builds/$build_id"
+            fi
             exit 0
           fi
-          curl -L -o app-build.android "$apk_url"
-          ls -lh app-build.android
+          
+          echo "Downloading artifact from: $artifact_url"
+          mkdir -p build-artifacts
+          
+          # Download the artifact with a proper file extension
+          if [[ "$artifact_url" == *.apk ]]; then
+            artifact_path="build-artifacts/app-build.apk"
+          elif [[ "$artifact_url" == *.aab ]]; then
+            artifact_path="build-artifacts/app-bundle.aab"
+          else
+            # If we can't determine the type, use a generic name
+            artifact_path="build-artifacts/app-build"
+          fi
+          
+          curl -L -o "$artifact_path" "$artifact_url"
+          
+          # List downloaded artifacts
+          echo "Downloaded artifacts:"
+          ls -lh build-artifacts/
+          
+          # Save artifact path for the next step
+          echo "ARTIFACT_PATH=$artifact_path" >> $GITHUB_ENV
 
-      - name: Upload APK / AAB artifact
+      - name: Upload build artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: expo-artifact
-          path: app-build.android
+          name: expo-build-artifacts
+          path: |
+            build-output.json
+            build-artifacts/
+          retention-days: 7
+          if-no-files-found: warn
+          compression-level: 6
