@@ -4,37 +4,99 @@ import * as XLSX from 'xlsx';
 import { TimeEntry } from '../types/api.types';
 import { getTempDir, ensureDirExists, saveFile } from './fileSystem';
 
+// Define the Employee type for better type safety
+type EmployeeType = {
+  _id?: any;
+  id?: any;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  $oid?: string;
+  buffer?: any;
+};
+
 // Helper function to get employee name safely
-const getEmployeeName = (employee: any): string => {
+export const getEmployeeName = (employee: string | EmployeeType | null | undefined, employees: any[] = []): string => {
   try {
     if (!employee) return 'N/A';
     
-    // Si es un string (ID del empleado)
+    // If it's already a string, return it
     if (typeof employee === 'string') {
-      // Si es un ObjectId de MongoDB (24 caracteres hexadecimales)
+      // If it's a MongoDB ObjectId (24 hex characters)
       if (/^[0-9a-fA-F]{24}$/.test(employee)) {
-        // Devolver un marcador de posición mientras se carga el nombre
-        return 'Cargando...';
+        // Try to find the employee in the provided list
+        const foundEmployee = employees.find(e => {
+          const empId = safeGetId(e._id || e.id);
+          return empId === employee;
+        });
+        
+        if (foundEmployee) {
+          if (foundEmployee.name) return foundEmployee.name;
+          if (foundEmployee.firstName || foundEmployee.lastName) {
+            return `${foundEmployee.firstName || ''} ${foundEmployee.lastName || ''}`.trim();
+          }
+        }
+        
+        return `Empleado ${employee.substring(18)}`;
       }
       return employee;
     }
     
-    // Si es un objeto con $oid (formato de MongoDB)
+    // If it's an object with $oid (MongoDB format)
     if (employee.$oid && typeof employee.$oid === 'string') {
-      return 'Cargando...';
+      return `Empleado ${employee.$oid.substring(18)}`;
     }
     
-    // Si es un objeto con propiedad name
+    // Handle buffer format (from MongoDB ObjectId)
+    if (employee.buffer && typeof employee.buffer === 'object' && '0' in employee.buffer) {
+      const buffer = employee.buffer as { [key: number]: number };
+      const hexString = Object.values(buffer)
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+      
+      // Try to find the employee in the provided list
+      const foundEmployee = employees.find(e => {
+        const empId = safeGetId(e._id || e.id);
+        return empId === hexString;
+      });
+      
+      if (foundEmployee) {
+        if (foundEmployee.name) return foundEmployee.name;
+        if (foundEmployee.firstName || foundEmployee.lastName) {
+          return `${foundEmployee.firstName || ''} ${foundEmployee.lastName || ''}`.trim();
+        }
+      }
+      
+      return 'Empleado ' + hexString.substring(0, 6);
+    }
+    
+    // If it's an object with name property
     if (typeof employee === 'object' && employee !== null) {
-      // Si tiene propiedad name
+      // If it has a name property
       if (employee.name) return employee.name;
       
-      // Si tiene propiedad firstName y lastName
+      // If it has firstName and lastName properties
       if (employee.firstName || employee.lastName) {
         return `${employee.firstName || ''} ${employee.lastName || ''}`.trim();
       }
       
-      // Si es un objeto pero no tiene propiedades conocidas, intentar stringify
+      // If it has an _id or id, try to find the employee in the provided list
+      const empId = safeGetId(employee._id || employee.id);
+      if (empId) {
+        const foundEmployee = employees.find(e => {
+          const eId = safeGetId(e._id || e.id);
+          return eId === empId;
+        });
+        
+        if (foundEmployee) {
+          if (foundEmployee.name) return foundEmployee.name;
+          if (foundEmployee.firstName || foundEmployee.lastName) {
+            return `${foundEmployee.firstName || ''} ${foundEmployee.lastName || ''}`.trim();
+          }
+        }
+      }
+      
+      // If it's an object but doesn't have known properties, try to stringify
       const str = JSON.stringify(employee);
       return str.length > 50 ? str.substring(0, 47) + '...' : str;
     }
@@ -46,29 +108,88 @@ const getEmployeeName = (employee: any): string => {
   }
 };
 
+// Helper function to safely get any ID
+const safeGetId = (id: any): string => {
+  if (!id) return '';
+  if (typeof id === 'string') return id;
+  if (id.$oid) return id.$oid;
+  if (id.buffer) {
+    // Handle buffer format (from MongoDB ObjectId)
+    try {
+      const hexString = Object.values(id.buffer as { [key: number]: number })
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+      return hexString;
+    } catch (error) {
+      console.error('Error converting buffer to hex:', error);
+      return '';
+    }
+  }
+  if (id._id) return safeGetId(id._id);
+  return JSON.stringify(id);
+};
+
 export const exportToExcel = async (data: TimeEntry[], dateRange: { start: Date; end: Date }, employees: any[] = []) => {
   try {
     // Create a map of employee IDs to their full data
-    const employeeMap = new Map();
+    const employeeMap = new Map<string, any>();
+    
+    // First, add all employees from the provided list
     employees.forEach(emp => {
-      const empId = getEmployeeId(emp);
+      const empId = safeGetId(emp._id || emp.id);
       if (empId) {
         employeeMap.set(empId, emp);
+      }
+    });
+    
+    // Then, try to find employees from the time entries that might not be in the main list
+    data.forEach(entry => {
+      if (entry.employee) {
+        let empId: string | null = null;
+        
+        if (typeof entry.employee === 'string') {
+          empId = safeGetId(entry.employee);
+        } else {
+          // It's an Employee object
+          empId = safeGetId(entry.employee._id || entry.employee.id);
+        }
+        
+        if (empId && !employeeMap.has(empId)) {
+          // If we don't have this employee in our map, use the entry's employee data
+          employeeMap.set(empId, entry.employee);
+        }
       }
     });
 
     // Format data for Excel with enhanced employee data
     const excelData = data.map(entry => {
-      const empId = getEmployeeId(entry.employee);
-      const employeeData = empId ? employeeMap.get(empId) : entry.employee;
+      // Get employee data
+      let empId: string | null = null;
+      let employeeData = null;
       
+      if (entry.employee) {
+        if (typeof entry.employee === 'string') {
+          empId = safeGetId(entry.employee);
+          employeeData = empId ? employeeMap.get(empId) : null;
+        } else {
+          // It's an Employee object
+          empId = safeGetId(entry.employee._id || entry.employee.id);
+          employeeData = empId ? employeeMap.get(empId) : entry.employee;
+        }
+      }
+      
+      // Get the employee name
+      const employeeName = employeeData ? getEmployeeName(employeeData, employees) : 'Empleado desconocido';
+      
+      // Format the entry data
       return {
-        'Funcionário': getEmployeeName(employeeData || entry.employee),
+        'ID': safeGetId(entry._id),
+        'Funcionário': employeeName,
         'Data': formatDate(entry.date),
-        'Hora de Entrada': formatTime(entry.entryTime),
-        'Hora de Saída': entry.exitTime ? formatTime(entry.exitTime) : '--:--',
-        'Total de Horas': entry.totalHours ? formatDecimalToTime(entry.totalHours) : '--:--',
-        'Horas Extras': entry.extraHours ? formatDecimalToTime(entry.extraHours) : '--:--',
+        'Hora de Entrada': formatToHHMM(entry.entryTime),
+        'Hora de Saída': entry.exitTime ? formatToHHMM(entry.exitTime) : '--:--',
+        'Total de Horas': entry.totalHours || '--:--',
+        'Horas Extras': entry.extraHoursFormatted || (entry.extraHours ? formatToHHMM(entry.extraHours) : '--:--'),
         'Valor Hora': entry.dailyRate ? formatCurrency(entry.dailyRate / 8) : '--', // Assuming 8-hour workday
         'Valor Hora Extra': entry.extraHoursRate ? formatCurrency(entry.extraHoursRate) : '--',
         'Total a Pagar': entry.total ? formatCurrency(entry.total) : '--',
@@ -83,10 +204,11 @@ export const exportToExcel = async (data: TimeEntry[], dateRange: { start: Date;
     
     // Set column widths
     const wscols = [
+      { wch: 24 }, // ID
       { wch: 20 }, // Funcionário
       { wch: 12 }, // Data
       { wch: 12 }, // Hora de Entrada
-      { wch: 10 }, // Hora de Saída
+      { wch: 12 }, // Hora de Saída
       { wch: 12 }, // Total de Horas
       { wch: 12 }, // Horas Extras
       { wch: 12 }, // Valor Hora
@@ -141,30 +263,101 @@ export const exportToExcel = async (data: TimeEntry[], dateRange: { start: Date;
 // Helper function to get employee ID from different possible formats
 const getEmployeeId = (employee: any): string | null => {
   if (!employee) return null;
+  
+  // Handle buffer format (from MongoDB ObjectId)
+  if (employee.buffer && typeof employee.buffer === 'object') {
+    try {
+      // Convert buffer to hex string
+      const hexString = Object.values(employee.buffer as { [key: number]: number })
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+      return hexString;
+    } catch (error) {
+      console.error('Error converting buffer to hex:', error);
+      return null;
+    }
+  }
+  
+  // Handle string ID
   if (typeof employee === 'string') return employee;
+  
+  // Handle MongoDB ObjectId
   if (employee.$oid) return employee.$oid;
-  if (employee._id) return employee._id.$oid || employee._id;
+  
+  // Handle _id field (could be string or object with $oid)
+  if (employee._id) {
+    if (typeof employee._id === 'string') return employee._id;
+    if (employee._id.$oid) return employee._id.$oid;
+  }
+  
   return null;
 };
 
 export const exportToPDF = async (data: TimeEntry[], dateRange: { start: Date; end: Date }, employees: any[] = []) => {
   try {
     // Create a map of employee IDs to their full data
-    const employeeMap = new Map();
+    const employeeMap = new Map<string, any>();
+    
+    // First, add all employees from the provided list
     employees.forEach(emp => {
       const empId = getEmployeeId(emp);
       if (empId) {
         employeeMap.set(empId, emp);
       }
     });
+    
+    // Then, try to find employees from the time entries that might not be in the main list
+    data.forEach(entry => {
+      if (entry.employee && typeof entry.employee === 'object' && 'buffer' in entry.employee) {
+        const empId = getEmployeeId(entry.employee);
+        if (empId && !employeeMap.has(empId)) {
+          // If we don't have this employee in our map, use the buffer data
+          employeeMap.set(empId, entry.employee);
+        }
+      }
+    });
 
-    // Enhance data with employee names
+    // Helper function to safely get any ID
+    const safeGetId = (id: any): string => {
+      if (!id) return '';
+      if (typeof id === 'string') return id;
+      if (id.$oid) return id.$oid;
+      if (id.buffer) {
+        const bufferId = getEmployeeId(id);
+        return bufferId || '';
+      }
+      if (id._id) return safeGetId(id._id);
+      return JSON.stringify(id);
+    };
+
+    // Enhance data with employee names and clean up IDs
     const enhancedData = data.map(entry => {
       const empId = getEmployeeId(entry.employee);
-      const employeeData = empId ? employeeMap.get(empId) : null;
+      let employeeData = empId ? employeeMap.get(empId) : null;
+      
+      // If we don't have the employee data, try to get it from the entry
+      if (!employeeData && entry.employee) {
+        employeeData = entry.employee;
+      }
+      
+      // Get the employee name
+      const employeeName = employeeData ? getEmployeeName(employeeData, employees) : 'Empleado desconocido';
+      
+      // Clean up the employee data
+      const cleanEmployeeData = employeeData ? {
+        ...employeeData,
+        id: safeGetId(employeeData.id || employeeData._id),
+        _id: safeGetId(employeeData._id || employeeData.id)
+      } : null;
+      
+      // Return the enhanced entry with cleaned IDs
       return {
         ...entry,
-        employee: employeeData || entry.employee // Use full employee data if available
+        _id: safeGetId(entry._id),
+        employee: cleanEmployeeData ? {
+          ...cleanEmployeeData,
+          name: employeeName
+        } : { name: employeeName }
       };
     });
 
@@ -179,51 +372,55 @@ export const exportToPDF = async (data: TimeEntry[], dateRange: { start: Date; e
             body { 
               font-family: Arial, sans-serif; 
               margin: 0;
-              padding: 20px;
-              font-size: 12px;
-              line-height: 1.4;
+              padding: 15px;
+              font-size: 10px;
+              line-height: 1.2;
             }
             h1 { 
-              color: #333; 
+              color: #000; 
               text-align: left; 
-              margin: 0 0 5px 0;
+              margin: 0 0 8px 0;
+              padding: 0;
               font-size: 14px;
               font-weight: bold;
             }
             .date-range { 
               text-align: left; 
               margin: 0 0 15px 0; 
+              padding: 0;
               color: #333;
-              font-size: 12px;
+              font-size: 11px;
             }
             table { 
               width: 100%; 
               border-collapse: collapse; 
               margin: 10px 0;
-              font-size: 12px;
+              font-size: 10px;
+              border: 1px solid #ddd;
             }
             th { 
               background-color: #f0f0f0; 
-              color: #333;
-              text-align: left; 
-              padding: 5px 8px;
-              font-weight: normal;
-              border-bottom: 1px solid #ddd;
+              color: #000;
+              text-align: center; 
+              padding: 4px 6px;
+              font-weight: bold;
+              border: 1px solid #ddd;
             }
             td { 
-              padding: 5px 8px; 
-              border-bottom: 1px solid #eee; 
+              padding: 4px 6px; 
+              border: 1px solid #eee; 
               vertical-align: middle;
             }
+            .text-center { text-align: center; }
+            .text-right { text-align: right; }
             .footer { 
-              margin-top: 20px; 
-              text-align: left; 
-              font-size: 10px; 
-              color: #999;
-              padding-top: 10px;
+              margin-top: 15px; 
+              text-align: right; 
+              font-size: 9px; 
+              color: #666;
+              padding-top: 5px;
               border-top: 1px solid #eee;
-            }
-          </style>
+            }     </style>
         </head>
         <body>
           <h1>Registros de Extras</h1>
@@ -245,19 +442,19 @@ export const exportToPDF = async (data: TimeEntry[], dateRange: { start: Date; e
             <tbody>
               ${enhancedData.map(entry => `
                 <tr>
-                  <td>${escapeHtml(getEmployeeName(entry.employee))}</td>
+                  <td>${escapeHtml(getEmployeeName(entry.employee, employees))}</td>
                   <td class="text-center">${formatDate(entry.date)}</td>
-                  <td class="text-center">${formatTime(entry.entryTime)}</td>
-                  <td class="text-center">${entry.exitTime ? formatTime(entry.exitTime) : '--:--'}</td>
-                  <td class="text-center">${entry.totalHours ? formatDecimalToTime(entry.totalHours) : '--:--'}</td>
-                  <td class="text-center">${entry.extraHours ? formatDecimalHours(entry.extraHours) : '--:--'}</td>
+                  <td class="text-center">${formatToHHMM(entry.entryTime)}</td>
+                  <td class="text-center">${entry.exitTime ? formatToHHMM(entry.exitTime) : '--:--'}</td>
+                  <td class="text-center">${entry.totalHours || '--:--'}</td>
+                  <td class="text-center">${entry.extraHoursFormatted || (entry.extraHours ? formatToHHMM(entry.extraHours) : '--:--')}</td>
                   <td class="text-right">${entry.total ? formatCurrency(entry.total) : '--'}</td>
                 </tr>
               `).join('')}
             </tbody>
           </table>
           <div class="footer">
-            Gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}
+            Gerado em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR', {hour: '2-digit', minute: '2-digit'})}
           </div>
         </body>
       </html>
@@ -300,56 +497,48 @@ const formatDate = (date: string | Date): string => {
   }
 };
 
-const formatTime = (timeString: string): string => {
+
+// Function to format time in HH:MM format
+const formatToHHMM = (timeValue: string | number | undefined): string => {
+  if (!timeValue && timeValue !== 0) return '--:--';
+  
   try {
-    // Si ya está en formato HH:mm, devolverlo directamente
-    if (/^\d{1,2}:\d{2}$/.test(timeString)) {
-      return timeString;
+    // If it's a number (minutes since midnight)
+    if (typeof timeValue === 'number') {
+      const hours = Math.floor(timeValue / 60);
+      const minutes = Math.round(timeValue % 60);
+      return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
     }
     
-    // Si es una fecha completa, extraer solo la hora
-    if (timeString.includes('T') || timeString.includes(' ')) {
-      const date = new Date(timeString);
-      if (isNaN(date.getTime())) {
-        // Si no es una fecha válida, intentar extraer la hora manualmente
-        const timeMatch = timeString.match(/(\d{1,2}):(\d{2})/);
-        return timeMatch ? `${timeMatch[1].padStart(2, '0')}:${timeMatch[2]}` : '--:--';
+    // If it's already in HH:MM format, ensure leading zeros
+    if (typeof timeValue === 'string' && /^\d{1,2}:\d{2}$/.test(timeValue)) {
+      const [hours, minutes] = timeValue.split(':').map(Number);
+      return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+    }
+    
+    // If it's an ISO 8601 date string (e.g., 2025-11-04T09:00:00.000Z)
+    if (typeof timeValue === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(timeValue)) {
+      // Extract just the time part (HH:MM)
+      const timePart = timeValue.match(/T(\d{2}:\d{2})/);
+      if (timePart && timePart[1]) {
+        return timePart[1]; // Returns just the HH:MM part
       }
-      return date.toLocaleTimeString('pt-BR', { 
-        hour: '2-digit', 
-        minute: '2-digit',
-        hour12: false
-      });
     }
     
-    // Si es solo la hora (ej: '09:00')
-    const [hours, minutes] = timeString.split(':');
-    if (hours && minutes) {
-      return `${hours.padStart(2, '0')}:${minutes.padStart(2, '0')}`;
+    // If it's some other date string, try to parse it
+    if (typeof timeValue === 'string') {
+      const date = new Date(timeValue);
+      if (!isNaN(date.getTime())) {
+        return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+      }
     }
     
-    return timeString;
+    // If we can't parse it, return as is
+    return String(timeValue);
   } catch (error) {
-    console.error('Error formatting time:', { timeString, error });
+    console.error('Error formatting time:', { timeValue, error });
     return '--:--';
   }
-};
-
-const formatDecimalToTime = (decimalHours: number): string => {
-  if (isNaN(decimalHours)) return '--:--';
-  const absoluteHours = Math.floor(Math.abs(decimalHours));
-  const minutes = Math.round((Math.abs(decimalHours) - absoluteHours) * 60);
-  const sign = decimalHours < 0 ? '-' : '';
-  return `${sign}${absoluteHours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-};
-
-// Formato especial para horas extras (sin signo negativo)
-const formatDecimalHours = (decimalHours: number): string => {
-  if (isNaN(decimalHours) || decimalHours === 0) return '00:00';
-  const absoluteHours = Math.floor(Math.abs(decimalHours));
-  const minutes = Math.round((Math.abs(decimalHours) - absoluteHours) * 60);
-  // Asegurar que siempre muestre 2 dígitos para horas y minutos
-  return `${absoluteHours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
 };
 
 // Formatear moneda

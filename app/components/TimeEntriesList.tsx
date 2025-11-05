@@ -4,10 +4,11 @@ import { ptBR } from 'date-fns/locale';
 import React, { useCallback, useEffect, useState } from 'react';
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { getTimeEntries } from '../../src/services/timeEntryService';
+import { employeeService } from '../../src/services/employeeService';
 import { ExportButton } from '../../src/components/export/ExportButton';
 
 // Import the TimeEntry type from the centralized types file
-import { TimeEntry } from '../../src/types/api.types';
+import { TimeEntry, Employee } from '../../src/types/api.types';
 
 // Local type for the component's internal use
 type TimeEntryWithFormattedExtras = Omit<TimeEntry, 'employee'> & {
@@ -24,7 +25,9 @@ interface TimeEntriesListProps {
 
 const TimeEntriesList: React.FC<TimeEntriesListProps> = ({ employeeId }) => {
   const [entries, setEntries] = useState<TimeEntryWithFormattedExtras[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingEmployees, setLoadingEmployees] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [startDate, setStartDate] = useState<Date>(() => {
     const date = new Date();
@@ -70,9 +73,23 @@ const TimeEntriesList: React.FC<TimeEntriesListProps> = ({ employeeId }) => {
     }
   }, [startDate, endDate, employeeId]);
 
+  // Fetch employees data
+  const fetchEmployees = useCallback(async () => {
+    try {
+      setLoadingEmployees(true);
+      const data = await employeeService.getEmployees();
+      setEmployees(data);
+    } catch (err) {
+      console.error('Error fetching employees:', err);
+    } finally {
+      setLoadingEmployees(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchEntries();
-  }, [fetchEntries]);
+    fetchEmployees();
+  }, [fetchEntries, fetchEmployees]);
 
   const formatTime = (timeString: string) => {
     try {
@@ -240,8 +257,9 @@ const TimeEntriesList: React.FC<TimeEntriesListProps> = ({ employeeId }) => {
                 employee: entry.employee._id // Convertir a string ID para la API
               }))}
               dateRange={{ start: startDate, end: endDate }}
-              disabled={loading || entries.length === 0}
+              disabled={loading || loadingEmployees || entries.length === 0}
               compact={true}
+              employees={employees}
             />
           </View>
         </View>

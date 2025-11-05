@@ -36,10 +36,44 @@ export const employeeService = {
    */
   async getEmployees(): Promise<Employee[]> {
     try {
-      const response = await api.get<Employee[]>('/employees');
-      return response.data;
-    } catch (error) {
+      const response = await api.get('/employees');
+      console.log('API Response:', response.data); // Debug log
+      
+      // Asegurarse de que la respuesta sea un array
+      if (!Array.isArray(response.data)) {
+        console.error('La respuesta de la API no es un array:', response.data);
+        return [];
+      }
+      
+      // Mapear la respuesta al formato esperado
+      const employees = response.data.map((emp: any) => ({
+        id: emp._id || emp.id, // Usar _id si está presente, de lo contrario id
+        _id: emp._id || emp.id, // Mantener compatibilidad
+        name: emp.name || 'Sin nombre',
+        email: emp.email || '',
+        isActive: emp.isActive !== undefined ? emp.isActive : true,
+        createdAt: emp.createdAt ? new Date(emp.createdAt) : new Date(),
+        updatedAt: emp.updatedAt ? new Date(emp.updatedAt) : new Date(),
+      }));
+      
+      console.log('Empleados procesados:', employees); // Debug log
+      return employees;
+    } catch (error: any) {
       console.error('Error al obtener empleados:', error);
+      // Mostrar el error completo para depuración
+      if (error.response) {
+        console.error('Detalles del error:', {
+          status: error.response.status,
+          data: error.response.data,
+          headers: error.response.headers,
+        });
+      } else if (error.request) {
+        console.error('No se recibió respuesta del servidor:', error.request);
+      } else if (error.message) {
+        console.error('Error al configurar la petición:', error.message);
+      } else {
+        console.error('Error desconocido al obtener empleados');
+      }
       throw error;
     }
   },

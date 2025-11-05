@@ -9,12 +9,13 @@ export interface User {
 }
 
 export interface Employee {
-  _id: string;
+  id: string;
+  _id?: string; // Keep for backward compatibility
   name: string;
   email?: string;
   isActive: boolean;
-  createdAt?: string;
-  updatedAt?: string;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
 }
 
 export interface TimeEntry {
@@ -28,6 +29,7 @@ export interface TimeEntry {
   notes?: string;
   dailyRate?: number;
   extraHours?: number;
+  extraHoursFormatted?: string;
   extraHoursRate?: number;
   total?: number;
   createdAt?: string;

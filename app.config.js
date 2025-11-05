@@ -49,7 +49,7 @@ module.exports = {
     eas: {
       projectId: 'a651b883-14e9-42ff-bac1-7a20de320c88'
     },
-    API_URL: process.env.API_URL || 'https://control-funcionarios-production.up.railway.app',
-    NODE_ENV: process.env.NODE_ENV || 'production'
+    API_URL: 'https://control-funcionarios-production.up.railway.app',
+    NODE_ENV: 'production'
   }
 };

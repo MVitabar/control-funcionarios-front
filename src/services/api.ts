@@ -1,6 +1,6 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
-import config from '../../config';
 import { getToken, saveToken, removeToken } from '../utils/storage';
+import API_CONFIG from '../config/api.config';
 
 // Tipos de respuesta de la API
 type LoginResponse = {
@@ -14,7 +14,7 @@ type LoginResponse = {
 };
 
 // Configuración base de la API
-const API_BASE_URL = config.API_URL;
+const API_BASE_URL = API_CONFIG.API_URL;
 
 // Crear instancia de Axios
 const api: AxiosInstance = axios.create({
