@@ -9,11 +9,20 @@ import * as React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, View, SafeAreaView, StatusBar as RNStatusBar, Alert } from 'react-native';
 import 'react-native-reanimated';
-import { useColorScheme } from '../src/hooks/use-color-scheme';
-import { useAuth } from '../src/hooks/useAuth';
 import { queryClient } from '../src/lib/queryClient';
 import apiService from '../src/services/api';
 import { User } from '../src/types/api.types';
+import { useColorScheme } from '../src/hooks/use-color-scheme';
+import { useAuth } from '../src/hooks/useAuth';
+
+// Función para generar un UUID v4
+function uuidv4() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
 
 const { DarkTheme, DefaultTheme, ThemeProvider } = Navigation;
 
@@ -187,44 +196,105 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-// Componente principal
-async function checkForUpdates() {
-  if (__DEV__) {
-    return; // No verificar actualizaciones en desarrollo
-  }
+// Hook personalizado para manejar actualizaciones
+function useUpdates() {
+  const [updateAvailable, setUpdateAvailable] = React.useState(false);
+  const [updateMessage, setUpdateMessage] = React.useState('');
+  const [updateId, setUpdateId] = React.useState<string | null>(null);
 
-  try {
-    const update = await Updates.checkForUpdateAsync();
-    
-    if (update.isAvailable) {
-      await Updates.fetchUpdateAsync();
-      // Notificar al usuario que se instalará una actualización
-      Alert.alert(
-        'Actualización disponible',
-        'Se ha descargado una actualización. La aplicación se reiniciará para aplicar los cambios.',
-        [
-          {
-            text: 'Reiniciar ahora',
-            onPress: async () => {
-              await Updates.reloadAsync();
-            },
-          },
-        ],
-        { cancelable: false }
-      );
+  const checkForUpdates = async () => {
+    if (__DEV__) {
+      // En desarrollo, generamos un UUID válido
+      const devUpdateId = uuidv4();
+      console.log('Modo desarrollo: ID de actualización simulado (UUID):', devUpdateId);
+      return { updateAvailable: true, updateId: devUpdateId };
     }
-  } catch (error) {
-    console.error('Error al verificar actualizaciones:', error);
-  }
+
+    try {
+      const update = await Updates.checkForUpdateAsync();
+      
+      if (update.isAvailable) {
+        console.log('Actualización disponible:', update);
+        setUpdateAvailable(true);
+        setUpdateId(update.manifest.id || null);
+        setUpdateMessage('Actualización disponible. Descargando...');
+        
+        const fetchedUpdate = await Updates.fetchUpdateAsync();
+        
+        if (fetchedUpdate.isNew) {
+          setUpdateMessage('Actualización descargada. Se aplicará en el próximo reinicio.');
+          return { updateAvailable: true, updateId: fetchedUpdate.manifest?.id || null };
+        }
+      }
+      
+      return { updateAvailable: false, updateId: null };
+    } catch (error) {
+      console.error('Error al verificar actualizaciones:', error);
+      setUpdateMessage('Error al verificar actualizaciones');
+      return { updateAvailable: false, updateId: null, error };
+    }
+  };
+
+  const reloadApp = async () => {
+    try {
+      await Updates.reloadAsync();
+    } catch (error) {
+      console.error('Error al recargar la aplicación:', error);
+    }
+  };
+
+  return {
+    checkForUpdates,
+    reloadApp,
+    updateAvailable,
+    updateMessage,
+    updateId,
+  };
 }
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const { checkForUpdates, reloadApp, updateId } = useUpdates();
+  
+  // Mostrar el ID de actualización en la consola para depuración
+  useEffect(() => {
+    if (updateId) {
+      console.log('ID de actualización actual:', updateId);
+    }
+  }, [updateId]);
   
   // Verificar actualizaciones al montar el componente
   useEffect(() => {
-    checkForUpdates();
-  }, []);
+    const checkUpdates = async () => {
+      const { updateAvailable: hasUpdate } = await checkForUpdates();
+      
+      if (hasUpdate) {
+        // Mostrar diálogo de actualización
+        Alert.alert(
+          'Actualización disponible',
+          'Se ha descargado una nueva versión de la aplicación. ¿Deseas reiniciar ahora para aplicar los cambios?',
+          [
+            {
+              text: 'Ahora no',
+              style: 'cancel',
+            },
+            {
+              text: 'Reiniciar',
+              onPress: reloadApp,
+            },
+          ],
+          { cancelable: false }
+        );
+      }
+    };
+    
+    checkUpdates();
+    
+    // Verificar actualizaciones cada 30 minutos
+    const interval = setInterval(checkUpdates, 30 * 60 * 1000);
+    
+    return () => clearInterval(interval);
+  }, [checkForUpdates, reloadApp]);
 
   return (
     <QueryClientProvider client={queryClient}>
