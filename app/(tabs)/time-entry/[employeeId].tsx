@@ -198,16 +198,54 @@ export default function TimeEntryScreen() {
     }
   };
 
+  // Calcular horas trabajadas normales (entrada - salida)
+  const calculateWorkedHours = () => {
+    if (!formData.entryTime || !formData.exitTime) return 0;
+    
+    try {
+      const [entryHours, entryMinutes] = formData.entryTime.split(':').map(Number);
+      const [exitHours, exitMinutes] = formData.exitTime.split(':').map(Number);
+      
+      // Calcular la diferencia en minutos
+      const entryInMinutes = (entryHours * 60) + entryMinutes;
+      const exitInMinutes = (exitHours * 60) + exitMinutes;
+      
+      // Si la hora de salida es menor que la de entrada, asumimos que es del día siguiente
+      const totalMinutes = exitInMinutes > entryInMinutes 
+        ? exitInMinutes - entryInMinutes 
+        : (24 * 60 - entryInMinutes) + exitInMinutes;
+      
+      // Convertir a horas con decimales
+      return totalMinutes / 60;
+    } catch (error) {
+      console.error('Error al calcular horas trabajadas:', error);
+      return 0;
+    }
+  };
+
   const calculateTotal = () => {
     const dailyRate = parseFloat(formData.dailyRate) || 0;
     const extraRate = parseFloat(formData.extraHoursRate) || 0;
+    
+    // Calcular horas trabajadas normales
+    const workedHours = calculateWorkedHours();
     
     // Calcular horas extras com base no input de texto
     const [hours = 0, minutes = 0] = extraHoursInput.split(':').map(Number);
     const extraHours = hours + (minutes / 60);
     
-    const total = dailyRate + (extraHours * extraRate);
-    return isNaN(total) ? 0 : parseFloat(total.toFixed(2));
+    // Calcular el total de horas (horas normales + horas extras)
+    const totalHours = workedHours + extraHours;
+    
+    // Calcular el total monetario (valor diario + valor de horas extras)
+    const totalEarnings = dailyRate + (extraHours * extraRate);
+    
+    return {
+      total: isNaN(totalEarnings) ? 0 : parseFloat(totalEarnings.toFixed(2)),
+      workedHours: parseFloat(workedHours.toFixed(2)),
+      extraHours: parseFloat(extraHours.toFixed(2)),
+      totalHours: parseFloat(totalHours.toFixed(2))
+    };
   };
 
   const handleSubmit = async () => {
@@ -218,22 +256,21 @@ export default function TimeEntryScreen() {
 
     setIsLoading(true);
     try {
-      // Convertir el tiempo de horas extras a minutos
-      const extraHoursMinutes = (formData.extraHoursTime.getHours() * 60) + formData.extraHoursTime.getMinutes();
+      // Calcular totales
+      const { total } = calculateTotal();
       
-      // Criar objeto com os dados do registro
+      // Crear objeto con los datos del registro según el esquema del backend
       const timeEntryData = {
         employee: employeeId,
         date: formData.date,
         entryTime: `${formData.date}T${formData.entryTime}:00.000Z`,
         ...(formData.exitTime && { exitTime: `${formData.date}T${formData.exitTime}:00.000Z` }),
         dailyRate: parseFloat(formData.dailyRate),
-        extraHours: extraHoursMinutes, // Usamos los minutos totales
-        extraHoursRate: parseFloat(formData.extraHoursRate) || 0,
-        total: calculateTotal(),
-        notes: formData.notes,
+        total: total,
+        notes: formData.notes || "",
         status: 'pending',
         extraHoursFormatted: `${formData.extraHoursTime.getHours().toString().padStart(2, '0')}:${formData.extraHoursTime.getMinutes().toString().padStart(2, '0')}`
+        // El backend calculará automáticamente las horas trabajadas basadas en entryTime y exitTime
       };
 
       console.log('Enviando datos:', timeEntryData);
@@ -256,7 +293,7 @@ export default function TimeEntryScreen() {
   const formattedDate = format(parseISO(formData.date), "EEEE d 'de' MMMM 'de' yyyy", { 
     locale: ptBR
   });
-  const total = calculateTotal();
+  const { total, workedHours, extraHours, totalHours } = calculateTotal();
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -275,8 +312,25 @@ export default function TimeEntryScreen() {
         {employee && (
           <View style={[styles.employeeInfo, { backgroundColor: colors.card }]}>
             <Ionicons name="person-outline" size={24} color={colors.primary} />
-            <View style={styles.employeeTextContainer}>
-              <Text style={[styles.employeeName, { color: colors.text }]}>{employee.name}</Text>
+            <View style={[styles.employeeTextContainer, { flex: 1 }]}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={[styles.employeeName, { color: colors.text }]}>{employee.name}</Text>
+                <TouchableOpacity 
+                  style={[styles.historyButton, { backgroundColor: colors.primary + '20' }]}
+                  onPress={() => router.push({
+                    pathname: '/(tabs)/employee-history/[employeeId]',
+                    params: { 
+                      employeeId: employee._id,
+                      employeeName: employee.name
+                    }
+                  })}
+                >
+                  <Ionicons name="time-outline" size={18} color={colors.primary} />
+                  <Text style={[styles.historyButtonText, { color: colors.primary }]}>
+                    Historial
+                  </Text>
+                </TouchableOpacity>
+              </View>
               <Text style={[styles.employeeId, { color: colors.text + '80' }]}>ID: {employeeId}</Text>
             </View>
           </View>
@@ -400,13 +454,55 @@ export default function TimeEntryScreen() {
               </Text>
             </View>
             <View style={styles.summaryBreakdown}>
-              <Text style={[styles.breakdownText, { color: colors.text + '80' }]}>
-                Valor dia: R$ {parseFloat(formData.dailyRate || '0').toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </Text>
-              {parseInt(formData.extraHours) > 0 && (
+              <View style={styles.summaryRow}>
                 <Text style={[styles.breakdownText, { color: colors.text + '80' }]}>
-                  + {extraHoursInput} h x R$ {parseInt(formData.extraHoursRate || '0').toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  Horas normales:
                 </Text>
+                <Text style={[styles.breakdownText, { color: colors.text }]}>
+                  {Math.floor(workedHours)}:{String(Math.round((workedHours % 1) * 60)).padStart(2, '0')} h
+                </Text>
+              </View>
+              
+              {extraHours > 0 && (
+                <View style={styles.summaryRow}>
+                  <Text style={[styles.breakdownText, { color: colors.text + '80' }]}>
+                    Horas extras:
+                  </Text>
+                  <Text style={[styles.breakdownText, { color: colors.text }]}>
+                    {Math.floor(extraHours)}:{String(Math.round((extraHours % 1) * 60)).padStart(2, '0')} h
+                  </Text>
+                </View>
+              )}
+              
+              <View style={[styles.summaryDivider, { backgroundColor: colors.border }]} />
+              
+              <View style={[styles.summaryRow, { marginTop: 4 }]}>
+                <Text style={[styles.breakdownText, { color: colors.text, fontWeight: 'bold' }]}>
+                  Total de horas:
+                </Text>
+                <Text style={[styles.breakdownText, { color: colors.primary, fontWeight: 'bold' }]}>
+                  {Math.floor(totalHours)}:{String(Math.round((totalHours % 1) * 60)).padStart(2, '0')} h
+                </Text>
+              </View>
+              
+              <View style={styles.summaryRow}>
+                <Text style={[styles.breakdownText, { color: colors.text + '80' }]}>
+                  Valor día:
+                </Text>
+                <Text style={[styles.breakdownText, { color: colors.text }]}>
+                  R$ {parseFloat(formData.dailyRate || '0').toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </Text>
+              </View>
+              
+              {parseInt(formData.extraHours) > 0 && (
+                <View style={styles.summaryRow}>
+                  <Text style={[styles.breakdownText, { color: colors.text + '80' }]}>
+                    Valor horas extras ({extraHoursInput} h):
+                  </Text>
+                  <Text style={[styles.breakdownText, { color: colors.text }]}>
+                    R$ {(extraHours * parseFloat(formData.extraHoursRate || '0')).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </Text>
+                </View>
               )}
             </View>
           </View>
@@ -504,6 +600,21 @@ const styles = StyleSheet.create({
   },
   employeeTextContainer: {
     marginLeft: 12,
+    flex: 1,
+  },
+  historyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  historyButtonText: {
+    marginLeft: 4,
+    fontSize: 14,
+    fontWeight: '500',
   },
   employeeName: {
     fontSize: 16,
@@ -635,6 +746,12 @@ const styles = StyleSheet.create({
   },
   summaryBreakdown: {
     marginTop: 8,
+    width: '100%',
+  },
+  summaryDivider: {
+    height: 1,
+    width: '100%',
+    marginVertical: 8,
   },
   breakdownText: {
     fontSize: 14,
