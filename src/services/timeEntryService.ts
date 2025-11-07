@@ -140,52 +140,45 @@ export const updateTimeEntry = async (
   id: string, 
   data: UpdateTimeEntryDto
 ): Promise<TimeEntry> => {
+  // Crear un nuevo objeto para evitar modificar el original
   const formattedData: UpdateTimeEntryDto = { ...data };
   
-  // Formatear fechas si se proporcionan
-  if (data.entryTime) {
+  // Verificar si los tiempos son fechas ISO completas
+  const isEntryTimeISO = typeof data.entryTime === 'string' && data.entryTime.includes('T');
+  const isExitTimeISO = data.exitTime && typeof data.exitTime === 'string' && data.exitTime.includes('T');
+  
+  // Solo formatear si no son fechas ISO completas
+  if (data.entryTime && !isEntryTimeISO) {
     formattedData.entryTime = formatTime(data.entryTime);
   }
   
-  if (data.exitTime !== undefined) {
+  if (data.exitTime !== undefined && !isExitTimeISO) {
     formattedData.exitTime = data.exitTime ? formatTime(data.exitTime) : null;
   }
   
-  // Calcular horas si se proporcionan los tiempos de entrada/salida
-  if (data.entryTime && data.exitTime) {
-    const entry = parseTimeString(data.entryTime);
-    const exit = parseTimeString(data.exitTime);
-    
-    if (entry && exit) {
-      // Calcular diferencia en horas
-      const diffMs = exit.getTime() - entry.getTime();
-      const regularHours = parseFloat((diffMs / (1000 * 60 * 60)).toFixed(2));
-      
-      // Obtener horas extras si se proporcionan, de lo contrario usar 0
-      const extraHours = data.extraHours ?? 0;
-      
-      // Calcular total de horas (regulares + extras)
-      const totalHours = parseFloat((regularHours + extraHours).toFixed(2));
-      
-      // Calcular total a pagar
-      const dailyRate = data.dailyRate ?? 0;
-      const extraHoursRate = data.extraHoursRate ?? 0;
-      const total = parseFloat(
-        ((dailyRate / 8 * regularHours) + (extraHours * extraHoursRate)).toFixed(2)
-      );
-      
-      // Actualizar los campos calculados
-      formattedData.regularHours = regularHours;
-      formattedData.totalHours = totalHours;
-      formattedData.total = total;
-    }
+  // Eliminar campos calculados que no deberían enviarse al backend
+  const { regularHours, totalHours, total, ...restData } = formattedData;
+  
+  // Solo mantener los campos que el backend espera
+  const dataToSend: any = { ...restData };
+  
+  // Si tenemos fechas ISO, asegurarnos de que estén en el formato correcto
+  if (isEntryTimeISO && data.entryTime) {
+    dataToSend.entryTime = data.entryTime;
   }
   
-  console.log('Actualizando entrada con datos:', formattedData);
+  if (isExitTimeISO && data.exitTime) {
+    dataToSend.exitTime = data.exitTime;
+  } else if (data.exitTime === null) {
+    // Permitir null para eliminar la hora de salida
+    dataToSend.exitTime = null;
+  }
+  
+  console.log('Enviando al backend:', dataToSend);
   
   const response = await apiService.put<TimeEntry>(
     `/time-entries/${id}`,
-    formattedData
+    dataToSend
   );
   
   return response;
@@ -221,33 +214,6 @@ const formatTime = (time: string | Date): string => {
   
   // Asumir que ya está en formato HH:mm
   return time;
-};
-
-/**
- * Convierte un string de hora a objeto Date
- */
-const parseTimeString = (timeStr: string, baseDate: Date = new Date()): Date | null => {
-  if (!timeStr) return null;
-  
-  try {
-    // Si es un string ISO, convertirlo directamente
-    if (timeStr.includes('T') || timeStr.includes('Z')) {
-      return parseISO(timeStr);
-    }
-    
-    // Si es solo la hora (HH:mm), crear una fecha con la hora actual
-    const [hours, minutes] = timeStr.split(':').map(Number);
-    if (!isNaN(hours) && !isNaN(minutes)) {
-      const date = new Date(baseDate);
-      date.setHours(hours, minutes, 0, 0);
-      return date;
-    }
-    
-    return null;
-  } catch (error) {
-    console.error('Error al parsear hora:', error);
-    return null;
-  }
 };
 
 /**

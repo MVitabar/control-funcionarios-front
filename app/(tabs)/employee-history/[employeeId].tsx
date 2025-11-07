@@ -448,21 +448,30 @@ const EmployeeHistoryScreen = () => {
       const entryIdStr = String(entryId);
       console.log('ID como string:', entryIdStr);
       
+      // Crear fechas con la zona horaria correcta
+      const formatTimeForBackend = (date: Date) => {
+        // Asegurarse de que la fecha mantenga la hora local
+        const localDate = new Date(date);
+        // Convertir a ISO string y reemplazar la 'Z' por '+00:00' para indicar UTC
+        return localDate.toISOString().replace('Z', '+00:00');
+      };
+
       // Obtener la respuesta de la actualización
       const updateData: {
         entryTime: string;
         notes?: string;
         exitTime?: string;
       } = {
-        entryTime: entryDate.toISOString(),
+        entryTime: formatTimeForBackend(entryDate),
         notes: notes.trim() || undefined
       };
       
       // Solo incluir exitTime si existe
       if (exitDate) {
-        updateData.exitTime = exitDate.toISOString();
+        updateData.exitTime = formatTimeForBackend(exitDate);
       }
       
+      console.log('Actualizando entrada con datos:', updateData);
       const updatedEntry = await updateTimeEntry(entryIdStr, updateData);
       
       console.log('Respuesta de actualización:', updatedEntry);
