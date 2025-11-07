@@ -5,15 +5,20 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Modal,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
-  useColorScheme
+  useColorScheme,
+  Platform
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import apiService from '../../../src/services/api';
+import { updateTimeEntry } from '../../../src/services/timeEntryService';
 
 // Definición de tipos
 interface ApiResponse<T> {
@@ -24,6 +29,10 @@ interface ApiResponse<T> {
 
 interface MongoDBObjectId {
   $oid: string;
+  buffer?: {
+    [key: number]: number;
+  };
+  toString(): string;
 }
 
 interface MongoDBDate {
@@ -37,10 +46,12 @@ interface TimeEntry {
   entryTime: MongoDBDate;
   exitTime?: MongoDBDate;
   dailyRate: number;
+  regularHours?: number;
   totalHours: number;
   total: number;
   status: 'pending' | 'approved' | 'rejected';
   notes?: string;
+  extraHours?: number;
   extraHoursFormatted?: string;
   createdAt: MongoDBDate;
   updatedAt: MongoDBDate;
@@ -56,6 +67,13 @@ const EmployeeHistoryScreen = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'thisMonth' | 'lastMonth' | 'custom'>('thisMonth');
+  const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [entryTime, setEntryTime] = useState<Date>(new Date());
+  const [exitTime, setExitTime] = useState<Date | null>(null);
+  const [notes, setNotes] = useState('');
+  const [showEntryTimePicker, setShowEntryTimePicker] = useState(false);
+  const [showExitTimePicker, setShowExitTimePicker] = useState(false);
 
   // Colores dinámicos basados en el tema
   const colors = {
@@ -78,10 +96,21 @@ const EmployeeHistoryScreen = () => {
   }[colorScheme || 'light'];
 
   // Cargar los registros del empleado
-  const loadTimeEntries = useCallback(async () => {
+  const loadTimeEntries = useCallback(async (forceRefresh: boolean = false) => {
     try {
       setIsLoading(true);
-      const response = await apiService.get<ApiResponse<TimeEntry[]> | TimeEntry[]>(`/time-entries/employee/${employeeId}`);
+      
+      // Agregar parámetro de caché para forzar la actualización si es necesario
+      const url = `/time-entries/employee/${employeeId}${forceRefresh ? `?_t=${Date.now()}` : ''}`;
+      
+      const response = await apiService.get<ApiResponse<TimeEntry[]> | TimeEntry[]>(url, {
+        // Agregar encabezados para evitar el caché
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
       
       // Asegurarse de que la respuesta sea un array
       if (Array.isArray(response)) {
@@ -106,7 +135,8 @@ const EmployeeHistoryScreen = () => {
   // Manejar el refresco
   const handleRefresh = () => {
     setRefreshing(true);
-    loadTimeEntries();
+    // Forzar la actualización ignorando la caché
+    loadTimeEntries(true);
   };
 
   // Cargar datos al montar el componente
@@ -223,11 +253,285 @@ const EmployeeHistoryScreen = () => {
 
   const { totalDays, totalEarnings, totalExtraHours, totalHours } = calculateTotals();
 
+  // Función para abrir el modal de edición
+  const handleEditEntry = (entry: TimeEntry) => {
+    try {
+      console.log('Editando registro:', JSON.stringify(entry, null, 2));
+      
+      // Función auxiliar para manejar fechas de MongoDB
+      const parseMongoDate = (dateValue: any): Date | null => {
+        if (!dateValue) return null;
+        
+        try {
+          // Si es un objeto con $date
+          if (dateValue.$date) {
+            const date = new Date(dateValue.$date);
+            // Verificar si la fecha es válida
+            if (isNaN(date.getTime())) {
+              console.error('Fecha inválida:', dateValue.$date);
+              return null;
+            }
+            return date;
+          }
+          // Si es un string de fecha ISO
+          if (typeof dateValue === 'string') {
+            const date = new Date(dateValue);
+            if (isNaN(date.getTime())) {
+              console.error('Fecha inválida (string):', dateValue);
+              return null;
+            }
+            return date;
+          }
+          // Si es un objeto Date
+          if (dateValue instanceof Date) {
+            return isNaN(dateValue.getTime()) ? null : new Date(dateValue);
+          }
+          return null;
+        } catch (error) {
+          console.error('Error al parsear fecha:', error, 'Valor:', dateValue);
+          return null;
+        }
+      };
+      
+      // Establecer el registro que se está editando
+      setEditingEntry(entry);
+      
+      // Obtener la fecha base del registro (fecha del día)
+      const baseDate = parseMongoDate(entry.date) || new Date();
+      
+      // Manejar la fecha y hora de entrada
+      const entryDate = parseMongoDate(entry.entryTime);
+      if (entryDate) {
+        console.log('Hora de entrada del registro:', entryDate);
+        setEntryTime(entryDate);
+      } else {
+        console.warn('No se pudo obtener la hora de entrada del registro, usando valor por defecto');
+        // Usar la fecha base con hora predeterminada (9:00 AM)
+        const defaultDate = new Date(baseDate);
+        defaultDate.setHours(9, 0, 0, 0);
+        setEntryTime(defaultDate);
+      }
+      
+      // Manejar la fecha y hora de salida
+      if (entry.exitTime) {
+        const exitDate = parseMongoDate(entry.exitTime);
+        if (exitDate) {
+          console.log('Hora de salida del registro:', exitDate);
+          setExitTime(exitDate);
+        } else {
+          console.warn('Hora de salida inválida en el registro');
+          // Si no hay hora de salida válida, no establecer nada
+          setExitTime(null);
+        }
+      } else {
+        console.log('No hay hora de salida en el registro');
+        setExitTime(null);
+      }
+      
+      // Establecer las notas si existen
+      setNotes(entry.notes || '');
+      
+      // Mostrar el modal
+      setShowEditModal(true);
+    } catch (error) {
+      console.error('Error al preparar la edición:', error);
+      Alert.alert('Error', 'No se pudo cargar el registro para edición');
+    }
+  };
+
+  // Función para convertir un objeto de TimeEntry del servicio al formato del componente
+  const convertToComponentTimeEntry = (entry: any): TimeEntry => {
+    // Función auxiliar para asegurar que las fechas estén en el formato correcto
+    const ensureMongoDate = (date: any): MongoDBDate => {
+      if (date && typeof date === 'object' && '$date' in date) {
+        return date; // Ya está en formato MongoDBDate
+      }
+      return { $date: date ? new Date(date).toISOString() : new Date().toISOString() };
+    };
+
+    return {
+      ...entry,
+      _id: { $oid: entry._id },
+      employee: { 
+        $oid: typeof entry.employee === 'string' 
+          ? entry.employee 
+          : entry.employee?._id?.$oid || entry.employee?._id || '' 
+      },
+      date: ensureMongoDate(entry.date),
+      entryTime: ensureMongoDate(entry.entryTime),
+      exitTime: entry.exitTime ? ensureMongoDate(entry.exitTime) : undefined,
+      createdAt: ensureMongoDate(entry.createdAt),
+      updatedAt: ensureMongoDate(entry.updatedAt),
+      // Asegurar que los campos numéricos estén presentes
+      regularHours: entry.regularHours || 0,
+      extraHours: entry.extraHours || 0,
+      totalHours: entry.totalHours || 0,
+      total: entry.total || 0,
+      status: entry.status || 'pending',
+      dailyRate: entry.dailyRate || 0,
+      extraHoursFormatted: entry.extraHoursFormatted || '00:00'
+    };
+  };
+
+  // Función para guardar los cambios
+  const handleSaveChanges = async () => {
+    if (!editingEntry) {
+      console.error('No hay registro seleccionado para editar');
+      return;
+    }
+
+    try {
+      // Asegurarse de que las fechas sean válidas antes de enviar
+      const entryDate = entryTime instanceof Date && !isNaN(entryTime.getTime())
+        ? entryTime
+        : new Date();
+      
+      const exitDate = exitTime instanceof Date && !isNaN(exitTime.getTime())
+        ? exitTime
+        : null;
+      
+      // Verificar que la hora de salida sea posterior a la de entrada
+      if (exitDate && exitDate < entryDate) {
+        Alert.alert('Error', 'La hora de salida debe ser posterior a la hora de entrada');
+        return;
+      }
+
+      // Mostrar indicador de carga
+      setIsLoading(true);
+      
+      // Depuración: Mostrar la estructura completa del registro
+      console.log('Estructura completa del registro a editar:', JSON.stringify(editingEntry, null, 2));
+      
+      // Obtener el ID del registro de la manera más segura posible
+      let entryId: string | undefined;
+      
+      // Extraer el ID del registro de la manera más segura posible
+      const idObj = editingEntry._id;
+      
+      if (typeof idObj === 'string') {
+        entryId = idObj;
+      } else if (idObj && typeof idObj === 'object') {
+        // Si tiene $oid, usamos ese valor
+        if ('$oid' in idObj && typeof idObj.$oid === 'string') {
+          entryId = idObj.$oid;
+        } 
+        // Si tiene buffer, lo convertimos a string hexadecimal
+        else if ('buffer' in idObj && idObj.buffer && typeof idObj.buffer === 'object') {
+          const bufferArray = Object.values(idObj.buffer).map(Number);
+          if (bufferArray.length > 0) {
+            entryId = bufferArray.map(b => b.toString(16).padStart(2, '0')).join('');
+          }
+        }
+        // Último recurso: convertir a string
+        else {
+          entryId = String(idObj);
+        }
+      }
+      
+      // Asegurarse de que el ID sea un string
+      entryId = String(entryId);
+      
+      console.log('ID extraído del registro:', entryId);
+      
+      if (!entryId) {
+        throw new Error('No se pudo obtener un ID válido del registro. Estructura del _id: ' + JSON.stringify(editingEntry._id));
+      }
+
+      console.log('Actualizando registro con ID:', entryId);
+      console.log('Datos a enviar:', {
+        entryTime: entryDate.toISOString(),
+        exitTime: exitDate ? exitDate.toISOString() : undefined,
+        notes: notes.trim() || undefined
+      });
+      
+      // Actualizar el registro - asegurarse de que entryId sea un string
+      const entryIdStr = String(entryId);
+      console.log('ID como string:', entryIdStr);
+      
+      // Obtener la respuesta de la actualización
+      const updateData: {
+        entryTime: string;
+        notes?: string;
+        exitTime?: string;
+      } = {
+        entryTime: entryDate.toISOString(),
+        notes: notes.trim() || undefined
+      };
+      
+      // Solo incluir exitTime si existe
+      if (exitDate) {
+        updateData.exitTime = exitDate.toISOString();
+      }
+      
+      const updatedEntry = await updateTimeEntry(entryIdStr, updateData);
+      
+      console.log('Respuesta de actualización:', updatedEntry);
+      
+      // Convertir la entrada actualizada al formato del componente
+      const updatedTimeEntry = convertToComponentTimeEntry({
+        ...updatedEntry,
+        // Asegurarse de que los campos opcionales estén presentes
+        regularHours: updatedEntry.regularHours || 0,
+        extraHours: updatedEntry.extraHours || 0,
+        extraHoursFormatted: updatedEntry.extraHoursFormatted || '00:00',
+        total: updatedEntry.total || 0,
+        status: updatedEntry.status || 'pending'
+      });
+      
+      // Actualizar el estado local con los datos actualizados
+      setTimeEntries(prevEntries => 
+        prevEntries.map(entry => 
+          String(entry._id.$oid) === entryIdStr ? updatedTimeEntry : entry
+        )
+      );
+      
+      // Cerrar el modal
+      setShowEditModal(false);
+      
+      // Mostrar mensaje de éxito
+      Alert.alert('Éxito', 'El registro ha sido actualizado correctamente.');
+      
+      // Limpiar el estado de edición
+      setEditingEntry(null);
+      setEntryTime(new Date());
+      setExitTime(null);
+      setNotes('');
+    } catch (error: any) {
+      console.error('Error al actualizar el registro:', error);
+      console.error('Detalles del error:', {
+        message: error.message,
+        response: error.response?.data,
+        config: {
+          url: error.config?.url,
+          method: error.config?.method,
+          data: error.config?.data
+        }
+      });
+      Alert.alert('Error', `No se pudo actualizar el registro: ${error?.response?.data?.message || error?.message || 'Error desconocido'}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Renderizar cada elemento de la lista
   const renderTimeEntry = ({ item }: { item: TimeEntry }) => (
-    <View style={[styles.entryCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+    <TouchableOpacity 
+      style={[styles.entryCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+      onPress={() => handleEditEntry(item)}
+      activeOpacity={0.7}
+    >
       <View style={styles.entryHeader}>
         <Text style={[styles.entryDate, { color: colors.primary }]}>{formatDate(item.date)}</Text>
+        <TouchableOpacity 
+          onPress={(e) => {
+            e.stopPropagation();
+            handleEditEntry(item);
+          }}
+          style={styles.editButton}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="create-outline" size={18} color={colors.primary} />
+        </TouchableOpacity>
       </View>
       
       <View style={styles.entryTimes}>
@@ -240,11 +544,21 @@ const EmployeeHistoryScreen = () => {
           <Text style={[styles.timeLabel, { color: colors.secondaryText }]}>Salida</Text>
           <Text style={[styles.timeValue, { color: colors.text }]}>{formatTime(item.exitTime)}</Text>
         </View>
+      </View>
+      
+      {/* Sección de horas */}
+      <View style={styles.hoursContainer}>
+        <View style={styles.hourBlock}>
+          <Text style={[styles.hourLabel, { color: colors.secondaryText }]}>Horas Extras</Text>
+          <Text style={[styles.hourValue, { color: colors.text }]}>
+            {item.extraHoursFormatted || '00:00'}
+          </Text>
+        </View>
         
-        <View style={styles.timeBlock}>
-          <Text style={[styles.timeLabel, { color: colors.secondaryText }]}>Total</Text>
-          <Text style={[styles.timeValue, { color: colors.text }]}>
-            {Math.floor(item.totalHours)}:{String(Math.round((item.totalHours % 1) * 60)).padStart(2, '0')}h
+        <View style={[styles.hourBlock, { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 8 }]}>
+          <Text style={[styles.hourLabel, { color: colors.primary, fontWeight: '600' }]}>Total</Text>
+          <Text style={[styles.hourValue, { color: colors.primary, fontWeight: '600' }]}>
+            {formatHours(item.totalHours || 0)}
           </Text>
         </View>
       </View>
@@ -260,14 +574,154 @@ const EmployeeHistoryScreen = () => {
       
       <View style={styles.entryFooter}>
         <Text style={[styles.timeValue, { color: colors.text, fontSize: 14 }]}>
-          Horas extras: {item.extraHoursFormatted || '00:00'}
-        </Text>
-        <Text style={[styles.timeValue, { color: colors.text, fontSize: 14 }]}>
-          Total: R$ {item.total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          Total: R$ {item.total?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0,00'}
         </Text>
       </View>
-    </View>
+    </TouchableOpacity>
   );
+
+  // Función para formatear las horas en formato HH:MM
+  const formatHours = (hours: number): string => {
+    if (hours === undefined || hours === null) return '00:00';
+    const h = Math.floor(hours);
+    const m = Math.round((hours % 1) * 60);
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}h`;
+  };
+
+  // Función para formatear la hora en formato HH:mm sin conversión de zona horaria
+  const formatTimeUTC = (date: Date | null): string => {
+    if (!date || !(date instanceof Date) || isNaN(date.getTime())) return '--:--';
+    
+    // Obtener horas y minutos en UTC
+    const hours = date.getUTCHours().toString().padStart(2, '0');
+    const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+    
+    return `${hours}:${minutes}`;
+  };
+
+  // Renderizar el modal de edición
+  const renderEditModal = () => {
+    console.log('Renderizando modal con entryTime (UTC):', entryTime);
+    console.log('Renderizando modal con exitTime (UTC):', exitTime);
+    
+    // Asegurarse de que entryTime siempre tenga un valor válido (sin conversión de zona horaria)
+    const safeEntryTime = entryTime && entryTime instanceof Date && !isNaN(entryTime.getTime())
+      ? new Date(entryTime) // Crear una nueva instancia para evitar mutaciones
+      : new Date();
+      
+    // Asegurarse de que exitTime sea una fecha válida o null (sin conversión de zona horaria)
+    const safeExitTime = exitTime && exitTime instanceof Date && !isNaN(exitTime.getTime())
+      ? new Date(exitTime) // Crear una nueva instancia para evitar mutaciones
+      : null;
+
+    return (
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={showEditModal}
+        onRequestClose={() => setShowEditModal(false)}
+      >
+        <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
+          <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>
+              Editar Registro
+            </Text>
+            
+            <View style={styles.inputGroup}>
+              <Text style={[styles.inputLabel, { color: colors.text }]}>Hora de Entrada</Text>
+              <TouchableOpacity 
+                style={[styles.timeInput, { borderColor: colors.border }]}
+                onPress={() => setShowEntryTimePicker(true)}
+              >
+                <Text style={{ color: colors.text }}>
+                  {formatTimeUTC(safeEntryTime)}
+                </Text>
+              </TouchableOpacity>
+              {showEntryTimePicker && (
+                <DateTimePicker
+                  value={safeEntryTime}
+                  mode="time"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={(event, selectedDate) => {
+                    setShowEntryTimePicker(Platform.OS === 'ios');
+                    if (selectedDate) {
+                      // Mantener la fecha original pero actualizar solo la hora
+                      const newTime = new Date(safeEntryTime);
+                      newTime.setUTCHours(selectedDate.getHours(), selectedDate.getMinutes());
+                      setEntryTime(newTime);
+                      console.log('Nueva hora de entrada (UTC):', newTime.toISOString());
+                    }
+                  }}
+                />
+              )}
+            </View>
+            
+            <View style={styles.inputGroup}>
+              <Text style={[styles.inputLabel, { color: colors.text }]}>Hora de Salida</Text>
+              <TouchableOpacity 
+                style={[styles.timeInput, { borderColor: colors.border }]}
+                onPress={() => setShowExitTimePicker(true)}
+              >
+                <Text style={{ color: colors.text }}>
+                  {formatTimeUTC(safeExitTime)}
+                </Text>
+              </TouchableOpacity>
+              {showExitTimePicker && (
+                <DateTimePicker
+                  value={safeExitTime || new Date()}
+                  mode="time"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={(event, selectedDate) => {
+                    setShowExitTimePicker(Platform.OS === 'ios');
+                    if (selectedDate) {
+                      // Si no hay hora de salida, usar la fecha de entrada como base
+                      const baseDate = safeExitTime || safeEntryTime;
+                      const newTime = new Date(baseDate);
+                      newTime.setUTCHours(selectedDate.getHours(), selectedDate.getMinutes());
+                      setExitTime(newTime);
+                      console.log('Nueva hora de salida (UTC):', newTime.toISOString());
+                    }
+                  }}
+                />
+              )}
+            </View>
+            
+            <View style={styles.inputGroup}>
+              <Text style={[styles.inputLabel, { color: colors.text }]}>Notas</Text>
+              <TextInput
+                style={[styles.notesInput, { 
+                  borderColor: colors.border, 
+                  color: colors.text,
+                  backgroundColor: colors.card 
+                }]}
+                value={notes}
+                onChangeText={setNotes}
+                placeholder="Agregar notas..."
+                placeholderTextColor={colors.secondaryText}
+                multiline
+                numberOfLines={3}
+              />
+            </View>
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity 
+                style={[styles.modalButton, { borderColor: colors.border }]}
+                onPress={() => setShowEditModal(false)}
+              >
+                <Text style={{ color: colors.text }}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.modalButton, { backgroundColor: colors.primary }]}
+                onPress={handleSaveChanges}
+              >
+                <Text style={{ color: '#fff' }}>Guardar Cambios</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
 
   // Mostrar carga inicial
   if (isLoading) {
@@ -333,6 +787,9 @@ const EmployeeHistoryScreen = () => {
           </TouchableOpacity>
         ))}
       </ScrollView>
+
+      {/* Modal de edición */}
+      {renderEditModal()}
 
       {/* Resumen */}
       <View style={[styles.summaryContainer, { backgroundColor: colors.primary + '10' }]}>
@@ -498,25 +955,14 @@ const styles = StyleSheet.create({
   },
   entryCard: {
     borderRadius: 12,
-    borderWidth: 1,
+    padding: 16,
     marginBottom: 12,
-    overflow: 'hidden',
-    padding: 12,
-  },
-  entryTimes: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 8,
-    marginBottom: 8,
-  },
-  timeBlock: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  timeLabel: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 4,
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   timeValue: {
     fontSize: 16,
@@ -526,8 +972,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 12,
-    borderBottomWidth: 1,
+    marginBottom: 12,
+  },
+  editButton: {
+    padding: 4,
+    borderRadius: 4,
   },
   entryDate: {
     fontSize: 14,
@@ -575,11 +1024,50 @@ const styles = StyleSheet.create({
   notesText: {
     flex: 1,
     marginLeft: 8,
-    fontSize: 13,
-    fontStyle: 'italic',
+    fontSize: 14,
+    color: '#666',
+  },
+  hoursContainer: {
+    marginVertical: 12,
+    padding: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.02)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#eee',
+  },
+  hourBlock: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  hourLabel: {
+    fontSize: 14,
+    color: '#666',
+  },
+  hourValue: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  entryTimes: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  timeBlock: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  timeLabel: {
+    fontSize: 12,
+    marginBottom: 4,
   },
   entryFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
     marginTop: 12,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
     alignItems: 'flex-end',
   },
   amountText: {
@@ -610,6 +1098,67 @@ const styles = StyleSheet.create({
   },
   refreshButtonText: {
     marginLeft: 8,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  // Estilos del modal de edición
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    borderRadius: 12,
+    padding: 20,
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  inputGroup: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    marginBottom: 8,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  timeInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+  },
+  notesInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 12,
+    textAlignVertical: 'top',
+    minHeight: 100,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+  },
+  modalButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 5,
+    borderWidth: 1,
+  },
+  modalButtonText: {
     fontSize: 14,
     fontWeight: '500',
   },
