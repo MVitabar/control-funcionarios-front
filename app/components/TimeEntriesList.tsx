@@ -1,8 +1,9 @@
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import React, { useCallback, useEffect, useState, useRef, useMemo } from 'react';
+import React, { useCallback, useEffect, useState, useRef, useMemo, JSX } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 import { getTimeEntries } from '../../src/services/timeEntryService';
 import { employeeService } from '../../src/services/employeeService';
 import { ExportButton } from '../../src/components/export/ExportButton';
@@ -80,7 +81,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
-    paddingBottom: 100,
+    paddingBottom: 20,
   },
   centered: {
     flex: 1,
@@ -149,45 +150,42 @@ const styles = StyleSheet.create({
   },
   
   // Date Picker
-  dateRangeContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  filterContainer: {
     padding: 10,
     backgroundColor: '#fff',
     marginBottom: 10,
-    borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
+    borderRadius: 5,
     elevation: 2,
   },
-  datePickerContainer: {
-    flex: 1,
-    marginHorizontal: 5,
-  },
-  dateLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 5,
+  dateFilterContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 10,
   },
   dateButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 8,
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 4,
-    backgroundColor: '#fff',
+    borderColor: '#ccc',
+    borderRadius: 5,
+    padding: 10,
+    minWidth: 150,
+    alignItems: 'center',
   },
-  dateButtonText: {
-    fontSize: 16,
-    color: '#333',
-    marginLeft: 8,
+  employeeFilterContainer: {
+    marginTop: 10,
   },
-  dateRangeSeparator: {
-    marginHorizontal: 8,
-    color: '#666',
+  filterLabel: {
+    marginBottom: 5,
+    fontWeight: '500',
+  },
+  pickerContainer: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 5,
+    overflow: 'hidden',
+  },
+  picker: {
+    height: 50,
+    width: '100%',
   },
 });
 
@@ -196,11 +194,11 @@ const TimeEntriesList: React.FC<TimeEntriesListProps> = ({ employeeId }): React.
   const [entries, setEntries] = useState<TimeEntryWithFormattedExtras[]>([]);
   const [employees, setEmployees] = useState<EmployeeReference[]>([]);
   const employeesRef = useRef<EmployeeReference[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadingEmployees, setLoadingEmployees] = useState(false);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [loadingEmployees, setLoadingEmployees] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  
   // Date range state
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
   const [startDate, setStartDate] = useState<Date>(() => {
     const date = new Date();
     date.setDate(1); // First day of current month
@@ -214,10 +212,10 @@ const TimeEntriesList: React.FC<TimeEntriesListProps> = ({ employeeId }): React.
     return date;
   });
   
-  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
-  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+  const [showStartDatePicker, setShowStartDatePicker] = useState<boolean>(false);
+  const [showEndDatePicker, setShowEndDatePicker] = useState<boolean>(false);
   const [expandedEmployees, setExpandedEmployees] = useState<Record<string, boolean>>({});
-
+  
   // Fetch time entries
   const fetchEntries = useCallback(async (): Promise<void> => {
     try {
@@ -320,11 +318,16 @@ const TimeEntriesList: React.FC<TimeEntriesListProps> = ({ employeeId }): React.
     }));
   }, []);
 
-  // Group entries by employee with proper type safety
-  const entriesByEmployee = useMemo(() => {
+  // Filter and group entries for rendering with proper type safety
+  const filteredAndGroupedEntries = useMemo(() => {
+    // First filter by date range and selected employee
+    const filtered = selectedEmployeeId 
+      ? entries.filter(entry => entry.employee?._id === selectedEmployeeId)
+      : entries;
+
+    // Group entries by employee
     const grouped: Record<string, TimeEntryWithFormattedExtras[]> = {};
-    
-    entries.forEach(entry => {
+    filtered.forEach(entry => {
       try {
         if (!entry || !entry.employee) return;
         
@@ -335,190 +338,94 @@ const TimeEntriesList: React.FC<TimeEntriesListProps> = ({ employeeId }): React.
           grouped[employeeId] = [];
         }
         
-        // Ensure all required fields are present and properly typed
-        const safeEntry: TimeEntryWithFormattedExtras = {
-          // Required fields from TimeEntry
-          _id: String(entry._id || ''),
-          employee: {
-            _id: employeeId,
-            name: String(entry.employee.name || 'Empleado sin nombre').trim(),
-            email: entry.employee.email ? String(entry.employee.email).trim() : undefined
-          },
-          date: entry.date,
-          entryTime: entry.entryTime,
-          exitTime: entry.exitTime,
-          status: (() => {
-            const s = String(entry.status || 'PENDING').toUpperCase();
-            return (s === 'PENDING' || s === 'APPROVED' || s === 'REJECTED') 
-              ? s 
-              : 'PENDING';
-          })() as 'PENDING' | 'APPROVED' | 'REJECTED',
-          createdAt: entry.createdAt || new Date().toISOString(),
-          updatedAt: entry.updatedAt || new Date().toISOString(),
-          
-          // Ensure numeric fields have proper defaults
-          totalHours: Number(entry.totalHours) || 0,
-          regularHours: Number(entry.regularHours) || 0,
-          extraHours: Number(entry.extraHours) || 0,
-          total: Number(entry.total) || 0,
-          
-          // Optional fields with defaults
-          dailyRate: 'dailyRate' in entry ? Number(entry.dailyRate) || 0 : undefined,
-          extraHoursRate: 'extraHoursRate' in entry ? Number(entry.extraHoursRate) || 0 : undefined,
-          notes: entry.notes ? String(entry.notes).trim() : '',
-          
-          // Formatted fields for display
-          formattedDate: String(entry.formattedDate || format(new Date(entry.date), 'dd/MM/yyyy', { locale: ptBR })),
-          formattedEntryTime: String(entry.formattedEntryTime || (entry.entryTime ? format(new Date(entry.entryTime), 'HH:mm') : '--:--')),
-          formattedExitTime: String(entry.formattedExitTime || (entry.exitTime ? format(new Date(entry.exitTime), 'HH:mm') : '--:--')),
-          formattedTotalHours: String(entry.formattedTotalHours || formatDecimalToTime(Number(entry.totalHours) || 0)),
-          formattedRegularHours: String(entry.formattedRegularHours || formatDecimalToTime(Number(entry.regularHours) || 0)),
-          formattedExtraHours: String(entry.formattedExtraHours || formatDecimalToTime(Number(entry.extraHours) || 0)),
-          formattedTotal: String(entry.formattedTotal || `UYU ${(Number(entry.total) || 0).toFixed(2)}`),
-          extraHoursFormatted: String(entry.extraHoursFormatted || formatDecimalToTime(Number(entry.extraHours) || 0)),
-          employeeName: String(entry.employeeName || entry.employee?.name || 'Empleado sin nombre').trim(),
-        };
-        
-        grouped[employeeId].push(safeEntry);
+        grouped[employeeId].push(entry);
       } catch (error) {
         console.error('Error processing entry:', error);
       }
     });
-    
-    return grouped;
-  }, [entries]);
 
-  // Create filtered and grouped entries for rendering with proper type safety
-  type GroupedEntry = {
-    employee: { 
-      _id: string; 
-      name: string; 
-      email?: string | undefined;
-    }; 
-    entries: TimeEntryWithFormattedExtras[]; 
-    isExpanded: boolean;
-  };
-
-  const filteredAndGroupedEntries = useMemo((): GroupedEntry[] => {
-    return employees
-      .filter(employee => {
-        try {
-          if (!employee) return false;
-          // Si se proporciona un employeeId, solo incluir ese empleado
-          if (employeeId) {
-            return extractId(employee._id) === extractId(employeeId);
-          }
-          return true;
-        } catch (error) {
-          console.error('Error filtrando empleados:', error);
-          return false;
-        }
-      })
-      .map(employee => {
-        try {
-          if (!employee) return null;
-          
-          const employeeId = extractId(employee._id);
-          if (!employeeId) return null;
-
-          // Obtener entradas para este empleado
-          const employeeEntries = (entriesByEmployee[employeeId] || []).map(entry => ({
-            ...entry,
-            notes: entry.notes || '', // Asegurar que notes sea siempre un string
-            employee: {
-              _id: employeeId,
-              name: String(entry.employee?.name || employee.name || 'Empleado sin nombre').trim(),
-              email: entry.employee?.email || employee.email
-            },
-            employeeName: String(entry.employeeName || entry.employee?.name || employee.name || 'Empleado sin nombre').trim()
-          }));
-          
-          return {
-            employee: {
-              _id: employeeId,
-              name: String(employee.name || 'Empleado sin nombre').trim(),
-              email: employee.email
-            },
-            entries: employeeEntries,
-            isExpanded: expandedEmployees[employeeId] !== false // Por defecto expandido
-          };
-        } catch (error) {
-          console.error('Error procesando empleado:', error);
-          return null;
-        }
-      })
-      .filter((item): item is NonNullable<typeof item> => {
-        if (!item) return false;
-        // Asegurarse de que el objeto tenga la estructura correcta
-        const isValid = (
-          item.employee && 
-          typeof item.employee._id === 'string' && 
-          typeof item.employee.name === 'string' &&
-          Array.isArray(item.entries) &&
-          typeof item.isExpanded === 'boolean'
-        );
-        return isValid;
-      }) as GroupedEntry[];
-  }, [employees, employeeId, entriesByEmployee, expandedEmployees]);
+    // Create final grouped entries with proper type safety
+    return Object.keys(grouped).map(employeeId => ({
+      employee: {
+        _id: employeeId,
+        name: grouped[employeeId][0].employee.name,
+        email: grouped[employeeId][0].employee.email,
+      },
+      entries: grouped[employeeId],
+      isExpanded: expandedEmployees[employeeId] !== false // Por defecto expandido
+    }));
+  }, [selectedEmployeeId, entries, expandedEmployees]); // Simplified dependencies to only what's needed
 
   // Render date range selector
-  const renderDateRangeSelector = () => (
-    <View style={styles.dateRangeContainer}>
-      <View style={styles.datePickerContainer}>
-        <Text style={styles.dateLabel}>Fecha Inicial:</Text>
-        <TouchableOpacity
+  const renderDateRangeSelector = (): JSX.Element => (
+    <View style={styles.filterContainer}>
+      <View style={styles.dateFilterContainer}>
+        <TouchableOpacity 
           style={styles.dateButton}
           onPress={() => setShowStartDatePicker(true)}
         >
-          <Text style={styles.dateButtonText}>
-            {format(startDate, 'dd/MM/yyyy', { locale: ptBR })}
-          </Text>
+          <Text>Inicio: {format(startDate, 'dd/MM/yyyy')}</Text>
         </TouchableOpacity>
-        {showStartDatePicker && (
-          <DateTimePicker
-            value={startDate}
-            mode="date"
-            display="default"
-            onChange={(event, selectedDate) => {
-              setShowStartDatePicker(false);
-              if (selectedDate) {
-                setStartDate(selectedDate);
-              }
-            }}
-            maximumDate={endDate}
-            locale="pt-BR"
-          />
-        )}
-      </View>
-      
-      <View style={styles.dateRangeSeparator} />
-      
-      <View style={styles.datePickerContainer}>
-        <Text style={styles.dateLabel}>Fecha Final:</Text>
+        
         <TouchableOpacity 
-          style={styles.dateButton} 
+          style={styles.dateButton}
           onPress={() => setShowEndDatePicker(true)}
         >
-          <Text style={styles.dateButtonText}>
-            {format(endDate, 'dd/MM/yyyy', { locale: ptBR })}
-          </Text>
+          <Text>Fin: {format(endDate, 'dd/MM/yyyy')}</Text>
         </TouchableOpacity>
-        {showEndDatePicker && (
-          <DateTimePicker
-            value={endDate}
-            mode="date"
-            display="default"
-            onChange={(event, selectedDate) => {
-              setShowEndDatePicker(false);
-              if (selectedDate) {
-                setEndDate(selectedDate);
-              }
-            }}
-            minimumDate={startDate}
-            locale="pt-BR"
-          />
-        )}
       </View>
+      
+      <View style={styles.employeeFilterContainer}>
+        <Text style={styles.filterLabel}>Filtrar por empleado:</Text>
+        <View style={styles.pickerContainer}>
+          <Picker
+            selectedValue={selectedEmployeeId}
+            style={styles.picker}
+            onValueChange={(itemValue) => setSelectedEmployeeId(itemValue as string)}
+          >
+            <Picker.Item label="Todos los empleados" value="" />
+            {employees.map(employee => (
+              <Picker.Item 
+                key={employee._id} 
+                label={employee.name} 
+                value={employee._id} 
+              />
+            ))}
+          </Picker>
+        </View>
+      </View>
+      
+      {showStartDatePicker && (
+        <DateTimePicker
+          value={startDate}
+          mode="date"
+          display="default"
+          onChange={(event, selectedDate) => {
+            setShowStartDatePicker(false);
+            if (selectedDate) {
+              setStartDate(selectedDate);
+            }
+          }}
+          maximumDate={endDate}
+          locale="pt-BR"
+        />
+      )}
+      
+      {showEndDatePicker && (
+        <DateTimePicker
+          value={endDate}
+          mode="date"
+          display="default"
+          onChange={(event, selectedDate) => {
+            setShowEndDatePicker(false);
+            if (selectedDate) {
+              setEndDate(selectedDate);
+            }
+          }}
+          minimumDate={startDate}
+          locale="pt-BR"
+        />
+      )}
     </View>
   );
 
@@ -558,9 +465,9 @@ const TimeEntriesList: React.FC<TimeEntriesListProps> = ({ employeeId }): React.
           <Text style={styles.sectionTitle}>Período</Text>
           <View style={styles.exportButtonContainer}>
             <ExportButton 
-              data={entries}
+              data={filteredAndGroupedEntries.flatMap(group => group.entries)}
               dateRange={{ start: startDate, end: endDate }}
-              disabled={loading || loadingEmployees || entries.length === 0}
+              disabled={loading || loadingEmployees || filteredAndGroupedEntries.length === 0}
               compact={true}
               employees={employees}
             />
