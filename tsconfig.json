@@ -16,9 +16,7 @@
     "types": ["node", "jest", "@testing-library/jest-native"],
     "baseUrl": ".",
     "paths": {
-      "@/*": [
-        "./src/*"
-      ]
+      "@/*": ["./src/*"]
     },
     "allowSyntheticDefaultImports": true
   },

@@ -1,333 +1,143 @@
-import { format, parseISO } from 'date-fns';
+import { 
+  TimeEntry, 
+  TimeEntryCreateData, 
+  TimeEntryUpdateData, 
+  TimeEntryFilter
+} from '../types/api.types';
 import apiService from './api';
 
-export interface MongoDBObjectId {
-  $oid: string;
-}
+// Usamos apiService en lugar de crear una nueva instancia de Axios
+// Esto asegura que usemos la misma configuración de autenticación
 
-export interface MongoDBDate {
-  $date: string; // Formato ISO 8601: "2025-11-06T14:30:00.000Z"
-}
 
-export interface TimeEntry {
-  _id: MongoDBObjectId;
-  employee: MongoDBObjectId;
-  date: MongoDBDate;
-  entryTime: MongoDBDate;
-  exitTime?: MongoDBDate;  // Opcional porque puede ser nulo
-  dailyRate: number;
-  regularHours?: number;   // Horas normales (sin extras)
-  totalHours: number;      // Horas totales (regulares + extras)
-  total: number;           // Total a pagar (dailyRate + (extraHours * extraHoursRate))
-  status: 'pending' | 'approved' | 'rejected';
-  notes?: string;          // Comentarios opcionales
-  extraHours?: number;     // Horas extras trabajadas
-  extraHoursRate?: number; // Valor por hora extra
-  extraHoursFormatted?: string; // Formato legible de horas extras (ej: "2:30")
-  approvedBy?: MongoDBObjectId; // Referencia al usuario que aprobó
-  createdAt: MongoDBDate;
-  updatedAt: MongoDBDate;
-  __v: number;            // Versión del documento
-}
-
-// Tipos de ayuda para el manejo de fechas
-export interface TimeEntryFormatted extends Omit<TimeEntry, 'date' | 'entryTime' | 'exitTime' | 'createdAt' | 'updatedAt'> {
-  date: string;           // Formato: "2025-11-06"
-  entryTime: string;      // Formato: "09:00"
-  exitTime?: string;      // Formato: "17:30" (opcional)
-  createdAt: string;      // Fecha ISO completa
-  updatedAt: string;      // Fecha ISO completa
-}
-
-// Para crear/actualizar una entrada
-export interface CreateTimeEntryDto {
-  employee: string;       // ID del empleado
-  date: string;           // Fecha en formato ISO o "YYYY-MM-DD"
-  entryTime: string;      // Hora en formato "HH:mm" o ISO
-  exitTime?: string | null; // Opcional, puede ser string o null
-  dailyRate: number;
-  extraHours?: number;
-  extraHoursRate?: number;
-  notes?: string;
-  status?: 'pending' | 'approved' | 'rejected';
-}
-
-// Para actualizar una entrada existente
-export interface UpdateTimeEntryDto extends Partial<CreateTimeEntryDto> {
-  // Campos calculados que pueden ser actualizados
-  regularHours?: number;
-  totalHours?: number;
-  total?: number;
-  // Otros campos opcionales
-  status?: 'pending' | 'approved' | 'rejected';
-  approvedBy?: string;
-  exitTime?: string | null; // Permitir null para eliminar una hora de salida
-}
-
-export const getTimeEntries = async (params: {
-  startDate: Date | string;
-  endDate: Date | string;
-  employeeId?: string;
-  forceRefresh?: boolean;
-}): Promise<TimeEntry[]> => {
-  const formattedParams = {
-    startDate: formatDate(params.startDate),
-    endDate: formatDate(params.endDate),
-    ...(params.employeeId && { employeeId: params.employeeId }),
-    // Add a timestamp to prevent caching
-    _t: params.forceRefresh ? Date.now() : undefined
-  };
-
-  const response = await apiService.get<TimeEntry[]>('/time-entries', { 
-    params: formattedParams,
-    // Add headers to prevent caching
-    headers: {
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
-      'Pragma': 'no-cache',
-      'Expires': '0'
+export const getTimeEntries = async (filter: TimeEntryFilter): Promise<TimeEntry[]> => {
+  try {
+    const { startDate, endDate, employeeId, status, includeDetails } = filter;
+    
+    const params = new URLSearchParams();
+    
+    // Función para formatear fechas
+    const formatDateForAPI = (date: Date | string): string => {
+      if (date instanceof Date) {
+        return date.toISOString().split('T')[0];
+      }
+      // Si es un string, intentar convertirlo a Date y luego formatear
+      try {
+        const d = new Date(date);
+        if (isNaN(d.getTime())) {
+          throw new Error('Fecha inválida');
+        }
+        return d.toISOString().split('T')[0];
+      } catch (error) {
+        console.error('Error al formatear fecha:', error);
+        throw new Error('Formato de fecha inválido');
+      }
+    };
+    
+    const start = formatDateForAPI(startDate);
+    const end = formatDateForAPI(endDate);
+    
+    console.log('Formatted dates for API - start:', start, 'end:', end);
+    
+    params.append('startDate', start);
+    params.append('endDate', end);
+    
+    if (employeeId) params.append('employeeId', employeeId);
+    if (status) params.append('status', status);
+    if (includeDetails) params.append('includeDetails', 'true');
+    
+    const url = `/time-entries?${params.toString()}`;
+    console.log('Fetching time entries from:', url);
+    
+    const response = await apiService.get<TimeEntry[]>(url, {
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      }
+    });
+    
+    console.log('Time entries response received, count:', response.length);
+    return response;
+  } catch (error: any) {
+    if (error?.response) {
+      console.error('Error fetching time entries:', {
+        message: error.message,
+        code: error.code,
+        config: {
+          url: error.config?.url,
+          method: error.config?.method,
+          params: error.config?.params
+        },
+        response: error.response ? {
+          status: error.response.status,
+          statusText: error.response.statusText,
+          data: error.response.data
+        } : undefined
+      });
+      throw new Error(`Failed to fetch time entries: ${error.message}`);
+    } else if (error instanceof Error) {
+      console.error('Unexpected error fetching time entries:', error);
+      throw new Error(`Unexpected error: ${error.message}`);
+    } else {
+      console.error('Unknown error fetching time entries:', error);
+      throw new Error('An unknown error occurred while fetching time entries');
     }
-  });
-  return response || [];
+  }
 };
 
-/**
- * Crea una nueva entrada de tiempo
- */
-export const createTimeEntry = async (data: CreateTimeEntryDto): Promise<TimeEntry> => {
-  const formattedData = {
-    ...data,
-    // Asegurarse de que los campos de fecha/hora estén en el formato correcto
-    date: formatDate(data.date),
-    entryTime: formatTime(data.entryTime),
-    ...(data.exitTime && { exitTime: formatTime(data.exitTime) }),
-    // Establecer valores por defecto si no se proporcionan
-    status: data.status || 'pending',
-    extraHours: data.extraHours || 0,
-    extraHoursRate: data.extraHoursRate || 0,
-  };
-
-  const response = await apiService.post<TimeEntry>('/time-entries', formattedData);
-  return response;
+export const createTimeEntry = async (data: TimeEntryCreateData): Promise<TimeEntry> => {
+  try {
+    return await apiService.post<TimeEntry>('/time-entries', data);
+  } catch (error) {
+    console.error('Error creating time entry:', error);
+    throw error;
+  }
 };
 
-export const updateExitTime = async (id: string, exitTime: Date | string): Promise<TimeEntry> => {
-  const response = await apiService.post<TimeEntry>(`/time-entries/${id}/exit`, {
-    exitTime: formatTime(exitTime),
-  });
-  return response;
-};
-
-export const updateEntryStatus = async (
-  id: string,
-  status: 'pending' | 'approved' | 'rejected',
-  notes?: string
-): Promise<TimeEntry> => {
-  const response = await apiService.post<TimeEntry>(`/time-entries/${id}/status`, {
-    status,
-    notes,
-  });
-  return response;
+export const updateTimeEntry = async (id: string, data: TimeEntryUpdateData): Promise<TimeEntry> => {
+  try {
+    return await apiService.put<TimeEntry>(`/time-entries/${id}`, data);
+  } catch (error) {
+    console.error('Error updating time entry:', error);
+    throw error;
+  }
 };
 
 export const deleteTimeEntry = async (id: string): Promise<void> => {
-  await apiService.delete(`/time-entries/${id}`);
+  try {
+    await apiService.delete(`/time-entries/${id}`);
+  } catch (error) {
+    console.error('Error deleting time entry:', error);
+    throw error;
+  }
 };
 
-/**
- * Actualiza una entrada de tiempo existente
- */
-export const updateTimeEntry = async (
-  id: string, 
-  data: UpdateTimeEntryDto
-): Promise<TimeEntry> => {
-  // Crear un nuevo objeto para evitar modificar el original
-  const formattedData: UpdateTimeEntryDto = { ...data };
-  
-  // Verificar si los tiempos son fechas ISO completas
-  const isEntryTimeISO = typeof data.entryTime === 'string' && data.entryTime.includes('T');
-  const isExitTimeISO = data.exitTime && typeof data.exitTime === 'string' && data.exitTime.includes('T');
-  
-  // Solo formatear si no son fechas ISO completas
-  if (data.entryTime && !isEntryTimeISO) {
-    formattedData.entryTime = formatTime(data.entryTime);
+export const approveTimeEntry = async (id: string): Promise<TimeEntry> => {
+  try {
+    return await apiService.post<TimeEntry>(`/time-entries/${id}/approve`);
+  } catch (error) {
+    console.error('Error approving time entry:', error);
+    throw error;
   }
-  
-  if (data.exitTime !== undefined && !isExitTimeISO) {
-    formattedData.exitTime = data.exitTime ? formatTime(data.exitTime) : null;
-  }
-  
-  // Eliminar campos calculados que no deberían enviarse al backend
-  const { regularHours, totalHours, total, ...restData } = formattedData;
-  
-  // Solo mantener los campos que el backend espera
-  const dataToSend: any = { ...restData };
-  
-  // Si tenemos fechas ISO, asegurarnos de que estén en el formato correcto
-  if (isEntryTimeISO && data.entryTime) {
-    dataToSend.entryTime = data.entryTime;
-  }
-  
-  if (isExitTimeISO && data.exitTime) {
-    dataToSend.exitTime = data.exitTime;
-  } else if (data.exitTime === null) {
-    // Permitir null para eliminar la hora de salida
-    dataToSend.exitTime = null;
-  }
-  
-  console.log('Enviando al backend:', dataToSend);
-  
-  const response = await apiService.put<TimeEntry>(
-    `/time-entries/${id}`,
-    dataToSend
-  );
-  
-  return response;
 };
 
-/**
- * Funciones auxiliares para el manejo de fechas y formatos
- */
-
-/**
- * Formatea una fecha a 'YYYY-MM-DD'
- */
-const formatDate = (date: Date | string): string => {
-  if (!date) return '';
-  const dateObj = typeof date === 'string' ? parseISO(date) : date;
-  return format(dateObj, 'yyyy-MM-dd');
+export const rejectTimeEntry = async (id: string, reason: string): Promise<TimeEntry> => {
+  try {
+    return await apiService.post<TimeEntry>(`/time-entries/${id}/reject`, { reason });
+  } catch (error) {
+    console.error('Error rejecting time entry:', error);
+    throw error;
+  }
 };
 
-/**
- * Formatea una hora a 'HH:mm'
- */
-const formatTime = (time: string | Date): string => {
-  if (!time) return '';
-  
-  if (time instanceof Date) {
-    return format(time, 'HH:mm');
+export const getTimeEntryById = async (id: string): Promise<TimeEntry> => {
+  try {
+    return await apiService.get<TimeEntry>(`/time-entries/${id}`);
+  } catch (error) {
+    console.error('Error fetching time entry:', error);
+    throw error;
   }
-  
-  // Si es un string ISO, convertirlo a Date primero
-  if (time.includes('T') || time.includes('Z')) {
-    return format(parseISO(time), 'HH:mm');
-  }
-  
-  // Asumir que ya está en formato HH:mm
-  return time;
 };
 
-/**
- * Formatea una entrada de tiempo para mostrarla en la UI
- */
-export const formatTimeEntryForDisplay = (entry: TimeEntry): TimeEntryFormatted => {
-  // Función para formatear fechas de MongoDB a strings legibles
-  const formatMongoDate = (mongoDate: MongoDBDate | undefined, formatString: string = 'yyyy-MM-dd'): string => {
-    if (!mongoDate?.$date) return '';
-    try {
-      return format(parseISO(mongoDate.$date), formatString);
-    } catch (error) {
-      console.error('Error al formatear fecha:', error);
-      return '';
-    }
-  };
-
-  // Función para formatear horas en formato legible (ej: 2.5 -> "2:30")
-  const formatHours = (hours?: number): string => {
-    if (hours === undefined || hours === null) return '00:00';
-    const h = Math.floor(hours);
-    const m = Math.round((hours - h) * 60);
-    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-  };
-
-  // Función para obtener el nombre del empleado de forma segura
-  const getEmployeeName = (employee: any): string => {
-    if (!employee) return 'Empleado desconocido';
-    
-    // Si es un string, asumimos que es el ID
-    if (typeof employee === 'string') return `Empleado ${employee.substring(0, 6)}...`;
-    
-    // Si es un objeto, intentar extraer el nombre
-    if (typeof employee === 'object') {
-      // Si tiene la propiedad 'name' directa
-      if (employee.name) return employee.name;
-      
-      // Si tiene first_name y last_name
-      if (employee.first_name || employee.last_name) {
-        return `${employee.first_name || ''} ${employee.last_name || ''}`.trim();
-      }
-      
-      // Si tiene firstName y lastName (camelCase)
-      if (employee.firstName || employee.lastName) {
-        return `${employee.firstName || ''} ${employee.lastName || ''}`.trim();
-      }
-      
-      // Si no se puede determinar el nombre, devolver un ID o indicador
-      if (employee._id) return `Empleado ${String(employee._id).substring(0, 6)}...`;
-      if (employee.id) return `Empleado ${String(employee.id).substring(0, 6)}...`;
-      
-      // Si es un objeto sin propiedades útiles, devolver un string genérico
-      return 'Empleado';
-    }
-    
-    return 'Empleado';
-  };
-
-  // Obtener el nombre del empleado
-  const employeeName = getEmployeeName(entry.employee);
-  
-  // Usar totalHours como horas regulares si está disponible
-  // Si no, calcular a partir de las horas de entrada/salida
-  let regularHours = entry.totalHours || 0;
-
-  // Crear un nuevo objeto con las propiedades formateadas
-  const formattedEntry: any = {
-    ...entry,
-    date: formatMongoDate(entry.date, 'yyyy-MM-dd'),
-    entryTime: formatMongoDate(entry.entryTime, 'HH:mm'),
-    exitTime: entry.exitTime ? formatMongoDate(entry.exitTime, 'HH:mm') : undefined,
-    extraHoursFormatted: formatHours(entry.extraHours),
-    regularHours, // Incluir las horas regulares calculadas
-    createdAt: entry.createdAt.$date,
-    updatedAt: entry.updatedAt.$date,
-    // Agregar el nombre del empleado como una propiedad separada para facilitar el acceso
-    employeeName: employeeName
-  };
-
-  // Si el empleado es un objeto, mantenerlo como está
-  if (typeof entry.employee === 'object' && entry.employee !== null) {
-    formattedEntry.employee = {
-      ...entry.employee,
-      name: employeeName
-    };
-  } else {
-    // Si es un string, convertirlo a un objeto con _id y name
-    formattedEntry.employee = {
-      _id: entry.employee,
-      name: employeeName
-    };
-  }
-
-  return formattedEntry;
-};
-
-/**
- * Convierte una fecha/hora de la UI a formato ISO para la API
- */
-
-export const toApiDateTime = (date: Date | string): string => {
-  if (typeof date === 'string') {
-    // Si ya es un string ISO, devolverlo tal cual
-    if (date.includes('T')) return date;
-    // Si es solo fecha, agregar hora media noche UTC
-    if (date.match(/^\d{4}-\d{2}-\d{2}$/)) return `${date}T00:00:00.000Z`;
-    // Si es solo hora, asumir fecha actual
-    if (date.match(/^\d{2}:\d{2}$/)) {
-      const [hours, minutes] = date.split(':').map(Number);
-      const d = new Date();
-      d.setHours(hours, minutes, 0, 0);
-      return d.toISOString();
-    }
-  }
-  // Si es un objeto Date, convertirlo a ISO string
-  return (date as Date).toISOString();
-};
+// No es necesario exportar la instancia de api ya que usamos apiService

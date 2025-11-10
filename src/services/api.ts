@@ -48,18 +48,43 @@ api.interceptors.request.use(
 
 // Interceptor para manejar respuestas
 api.interceptors.response.use(
-  (response: AxiosResponse) => response,
+  (response: AxiosResponse) => {
+    console.log('Respuesta exitosa:', {
+      url: response.config.url,
+      status: response.status,
+      data: response.data
+    });
+    return response;
+  },
   (error: AxiosError) => {
     // Manejo de errores global
     if (error.response) {
       // Errores 4xx/5xx
-      console.error('Error de respuesta:', error.response.data);
+      console.error('Error de respuesta:', {
+        status: error.response.status,
+        statusText: error.response.statusText,
+        url: error.config?.url,
+        method: error.config?.method,
+        data: error.response.data,
+        headers: error.response.headers
+      });
     } else if (error.request) {
       // La petición fue hecha pero no hubo respuesta
-      console.error('No se recibió respuesta del servidor');
+      console.error('No se recibió respuesta del servidor:', {
+        message: error.message,
+        code: error.code,
+        config: {
+          url: error.config?.url,
+          method: error.config?.method,
+          headers: error.config?.headers
+        }
+      });
     } else {
       // Error al configurar la petición
-      console.error('Error al configurar la petición:', error.message);
+      console.error('Error al configurar la petición:', {
+        message: error.message,
+        stack: error.stack
+      });
     }
     return Promise.reject(error);
   }

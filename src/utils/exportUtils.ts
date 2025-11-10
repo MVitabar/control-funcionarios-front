@@ -73,18 +73,20 @@ export const getEmployeeName = (employee: string | EmployeeType | null | undefin
     // If it's an object with name property
     if (typeof employee === 'object' && employee !== null) {
       // If it has a name property
-      if (employee.name) return employee.name;
+      if ('name' in employee && employee.name) return employee.name;
       
       // If it has firstName and lastName properties
-      if (employee.firstName || employee.lastName) {
-        return `${employee.firstName || ''} ${employee.lastName || ''}`.trim();
+      if (('firstName' in employee || 'lastName' in employee)) {
+        const firstName = 'firstName' in employee ? employee.firstName : '';
+        const lastName = 'lastName' in employee ? employee.lastName : '';
+        return `${firstName || ''} ${lastName || ''}`.trim();
       }
       
       // If it has an _id or id, try to find the employee in the provided list
-      const empId = safeGetId(employee._id || employee.id);
+      const empId = safeGetId(employee._id);
       if (empId) {
         const foundEmployee = employees.find(e => {
-          const eId = safeGetId(e._id || e.id);
+          const eId = safeGetId(e._id);
           return eId === empId;
         });
         
@@ -151,7 +153,7 @@ export const exportToExcel = async (data: TimeEntry[], dateRange: { start: Date;
           empId = safeGetId(entry.employee);
         } else {
           // It's an Employee object
-          empId = safeGetId(entry.employee._id || entry.employee.id);
+          empId = safeGetId(entry.employee._id);
         }
         
         if (empId && !employeeMap.has(empId)) {
@@ -172,8 +174,8 @@ export const exportToExcel = async (data: TimeEntry[], dateRange: { start: Date;
           empId = safeGetId(entry.employee);
           employeeData = empId ? employeeMap.get(empId) : null;
         } else {
-          // It's an Employee object
-          empId = safeGetId(entry.employee._id || entry.employee.id);
+          // It's an Employee object - use only _id for EmployeeReference
+          empId = safeGetId(entry.employee._id);
           employeeData = empId ? employeeMap.get(empId) : entry.employee;
         }
       }
@@ -189,7 +191,7 @@ export const exportToExcel = async (data: TimeEntry[], dateRange: { start: Date;
         'Hora de Entrada': formatToHHMM(entry.entryTime),
         'Hora de Saída': entry.exitTime ? formatToHHMM(entry.exitTime) : '--:--',
         'Total de Horas': entry.totalHours || '--:--',
-        'Horas Extras': entry.extraHoursFormatted || (entry.extraHours ? formatToHHMM(entry.extraHours) : '--:--'),
+        'Horas Extras': entry.extraHours ? formatToHHMM(entry.extraHours) : '--:--',
         'Valor Hora': entry.dailyRate ? formatCurrency(entry.dailyRate / 8) : '--', // Assuming 8-hour workday
         'Valor Hora Extra': entry.extraHoursRate ? formatCurrency(entry.extraHoursRate) : '--',
         'Total a Pagar': entry.total ? formatCurrency(entry.total) : '--',
@@ -346,8 +348,7 @@ export const exportToPDF = async (data: TimeEntry[], dateRange: { start: Date; e
       // Clean up the employee data
       const cleanEmployeeData = employeeData ? {
         ...employeeData,
-        id: safeGetId(employeeData.id || employeeData._id),
-        _id: safeGetId(employeeData._id || employeeData.id)
+        _id: safeGetId(employeeData._id)
       } : null;
       
       // Return the enhanced entry with cleaned IDs
@@ -361,9 +362,99 @@ export const exportToPDF = async (data: TimeEntry[], dateRange: { start: Date; e
       };
     });
 
-    // Log for debugging
-    console.log('Enhanced data for PDF:', JSON.stringify(enhancedData, null, 2));
-    // Create HTML content for PDF
+    // Agrupar registros por empleado
+    const entriesByEmployee = enhancedData.reduce((acc, entry) => {
+      const empId = entry.employee?._id || 'unknown';
+      if (!acc[empId]) {
+        acc[empId] = [];
+      }
+      acc[empId].push(entry);
+      return acc;
+    }, {} as Record<string, typeof enhancedData>);
+
+    // Ordenar empleados por nombre
+    const sortedEmployeeIds = Object.keys(entriesByEmployee).sort((a, b) => {
+      const nameA = getEmployeeName(entriesByEmployee[a][0]?.employee, employees).toLowerCase();
+      const nameB = getEmployeeName(entriesByEmployee[b][0]?.employee, employees).toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
+
+    // Generar filas de la tabla agrupadas por empleado
+    let tableRows = '';
+    
+    sortedEmployeeIds.forEach(empId => {
+      const employeeEntries = entriesByEmployee[empId];
+      if (!employeeEntries.length) return;
+      
+      const employeeName = getEmployeeName(employeeEntries[0].employee, employees);
+      
+      // Calcular totales por empleado
+      const employeeTotal = employeeEntries.reduce((sum, entry) => sum + (entry.total || 0), 0);
+      const totalExtraHours = employeeEntries.reduce((sum, entry) => sum + (entry.extraHours || 0), 0);
+      
+      // Fila de encabezado del empleado (sin total)
+      tableRows += `
+        <tr style="background-color: #f8f9fa; font-weight: bold;">
+          <td colspan="8">${escapeHtml(employeeName)}</td>
+        </tr>
+      `;
+      
+      // Ordenar registros por fecha
+      const sortedEntries = [...employeeEntries].sort((a, b) => 
+        new Date(a.date).getTime() - new Date(b.date).getTime()
+      );
+      
+      // Filas de registros del empleado
+      tableRows += sortedEntries.map(entry => `
+        <tr>
+          <td></td> <!-- Celda vacía para el nombre del empleado -->
+          <td class="text-center">${formatDate(entry.date)}</td>
+          <td class="text-center">${formatToHHMM(entry.entryTime)}</td>
+          <td class="text-center">${entry.exitTime ? formatToHHMM(entry.exitTime) : '--:--'}</td>
+          <td class="text-center">${entry.totalHours || '--:--'}</td>
+          <td class="text-center">${entry.extraHours ? formatToHHMM(entry.extraHours) : '--:--'}</td>
+          <td class="text-center">${entry.notes ? escapeHtml(entry.notes) : '--'}</td>
+          <td class="text-right">${entry.total ? formatCurrency(entry.total) : '--'}</td>
+        </tr>
+      `).join('');
+      
+      // Calcular el total de horas trabajadas correctamente
+      const totalWorkedMinutes = employeeEntries.reduce((total, entry) => {
+        if (!entry.totalHours) return total;
+        
+        // Si es un número, asumir que son minutos
+        if (typeof entry.totalHours === 'number') {
+          return total + entry.totalHours * 60; // Convertir horas a minutos
+        }
+        
+        // Si es un string en formato HH:MM, convertirlo a minutos
+        if (typeof entry.totalHours === 'string') {
+          const [hours, minutes] = entry.totalHours.split(':').map(Number);
+          return total + (hours * 60) + (minutes || 0);
+        }
+        
+        return total;
+      }, 0);
+      
+      // Convertir minutos totales a horas y minutos
+      const totalHours = Math.floor(totalWorkedMinutes / 60);
+      const totalMinutes = totalWorkedMinutes % 60;
+      const formattedTotalHours = `${totalHours.toString().padStart(2, '0')}:${totalMinutes.toString().padStart(2, '0')}`;
+      
+      // Fila de totales del empleado
+      tableRows += `
+        <tr style="border-top: 1px solid #dee2e6;">
+          <td colspan="4" class="text-right" style="font-weight: bold;">Total ${escapeHtml(employeeName)}:</td>
+          <td class="text-center">${formattedTotalHours}</td>
+          <td class="text-center">${formatToHHMM(totalExtraHours)}</td>
+          <td></td>
+          <td class="text-right" style="font-weight: bold;">${formatCurrency(employeeTotal)}</td>
+        </tr>
+        <tr><td colspan="8" style="height: 10px;"></td></tr> <!-- Espacio entre empleados -->
+      `;
+    });
+    
+    // Crear HTML final
     const html = `
       <html>
         <head>
@@ -420,7 +511,12 @@ export const exportToPDF = async (data: TimeEntry[], dateRange: { start: Date; e
               color: #666;
               padding-top: 5px;
               border-top: 1px solid #eee;
-            }     </style>
+            }
+            .grand-total {
+              font-weight: bold;
+              background-color: #e9ecef;
+            }
+          </style>
         </head>
         <body>
           <h1>Registros de Extras</h1>
@@ -436,21 +532,12 @@ export const exportToPDF = async (data: TimeEntry[], dateRange: { start: Date; e
                 <th>Saída</th>
                 <th>Total</th>
                 <th>Extras</th>
+                <th>Notas</th>
                 <th>Total a Pagar</th>
               </tr>
             </thead>
             <tbody>
-              ${enhancedData.map(entry => `
-                <tr>
-                  <td>${escapeHtml(getEmployeeName(entry.employee, employees))}</td>
-                  <td class="text-center">${formatDate(entry.date)}</td>
-                  <td class="text-center">${formatToHHMM(entry.entryTime)}</td>
-                  <td class="text-center">${entry.exitTime ? formatToHHMM(entry.exitTime) : '--:--'}</td>
-                  <td class="text-center">${entry.totalHours || '--:--'}</td>
-                  <td class="text-center">${entry.extraHoursFormatted || (entry.extraHours ? formatToHHMM(entry.extraHours) : '--:--')}</td>
-                  <td class="text-right">${entry.total ? formatCurrency(entry.total) : '--'}</td>
-                </tr>
-              `).join('')}
+              ${tableRows}
             </tbody>
           </table>
           <div class="footer">

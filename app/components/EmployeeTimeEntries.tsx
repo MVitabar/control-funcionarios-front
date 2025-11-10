@@ -1,10 +1,11 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { TimeEntry } from '../../src/types/api.types';
+import { TimeEntry } from '@/types/api.types';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
+// Define the extended TimeEntry type with formatted extras
 type TimeEntryWithFormattedExtras = Omit<TimeEntry, 'employee' | 'date' | 'entryTime' | 'exitTime' | 'createdAt' | 'updatedAt' | '_id' | 'status'> & {
   status: 'pending' | 'approved' | 'rejected';
   _id: string;
@@ -33,52 +34,100 @@ interface EmployeeTimeEntriesProps {
   onToggle: () => void;
 }
 
-const formatTime = (timeString: string) => {
+const formatTime = (timeString: string | null | undefined): string => {
+  // Si no hay valor, devolver valor por defecto
   if (!timeString) return '--:--';
   
-  // Si ya está en formato HH:MM, devolverlo tal cual
-  if (/^\d{1,2}:\d{2}$/.test(timeString)) {
-    return timeString;
-  }
-  
   try {
+    // Si ya está en formato HH:MM, validar y devolver
+    if (typeof timeString === 'string' && /^\d{1,2}:\d{2}$/.test(timeString)) {
+      return timeString;
+    }
+    
     // Si es un timestamp ISO, extraer solo la parte de la hora
-    if (timeString.includes('T')) {
+    if (typeof timeString === 'string' && timeString.includes('T')) {
       const timeMatch = timeString.match(/T(\d{2}:\d{2})/);
-      if (timeMatch && timeMatch[1]) {
-        return timeMatch[1]; // Devolver solo la parte de la hora (HH:MM)
+      if (timeMatch?.[1]) {
+        return timeMatch[1];
       }
     }
     
-    // Si no es un formato reconocido, devolver el string original
-    return timeString;
+    // Si no es un formato reconocido, devolver valor por defecto
+    return '--:--';
   } catch (e) {
     console.warn('Error al formatear hora:', { timeString, error: e });
-    return timeString; // En caso de error, devolver el string original
+    return '--:--';
   }
 };
 
-const formatDecimalToTime = (decimalHours: number): string => {
-  if (isNaN(decimalHours)) return '00:00';
+const formatDecimalToTime = (decimalHours: number | undefined): string => {
+  if (decimalHours === undefined || isNaN(decimalHours)) return '00:00';
   const hours = Math.floor(decimalHours);
   const minutes = Math.round((decimalHours - hours) * 60);
   return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
 };
 
-export const EmployeeTimeEntries: React.FC<EmployeeTimeEntriesProps> = ({
+const formatDate = (dateString: string | null | undefined): string => {
+  if (!dateString) return 'Fecha no disponible';
+  
+  try {
+    let dateStr = String(dateString);
+    
+    // Si es un timestamp ISO, extraer solo la parte de la fecha
+    if (dateStr.includes('T')) {
+      dateStr = dateStr.split('T')[0];
+    }
+    
+    // Asegurarse de que el formato sea YYYY-MM-DD
+    const dateMatch = dateStr.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (!dateMatch) return 'Formato de fecha inválido';
+    
+    const [, year, month, day] = dateMatch.map(Number);
+    const localDate = new Date(year, month - 1, day);
+    
+    if (isNaN(localDate.getTime())) return 'Fecha inválida';
+    
+    // Obtener el día de la semana en portugués
+    const dayOfWeek = format(localDate, 'EEEE', { locale: ptBR });
+    // Formatear la fecha como DD-MM-YYYY
+    const formattedDate = [
+      String(day).padStart(2, '0'),
+      String(month).padStart(2, '0'),
+      year
+    ].join('-');
+    
+    // Capitalizar la primera letra del día de la semana
+    const capitalizedDay = dayOfWeek.charAt(0).toUpperCase() + dayOfWeek.slice(1);
+    return `${capitalizedDay} ${formattedDate}`;
+    
+  } catch (error) {
+    console.error('Error al formatear fecha:', { date: dateString, error });
+    return 'Error en fecha';
+  }
+};
+
+const EmployeeTimeEntries: React.FC<EmployeeTimeEntriesProps> = ({
   employee,
-  entries,
+  entries = [], // Valor por defecto para evitar undefined
   expanded,
   onToggle,
 }) => {
   // Calculate total hours for the employee
-  const totalHours = entries.reduce((sum, entry) => sum + (entry.totalHours || 0), 0);
-  const totalExtraHours = entries.reduce((sum, entry) => sum + (entry.extraHours || 0), 0);
+  const totalHours = entries.reduce((sum: number, entry: TimeEntryWithFormattedExtras) => 
+    sum + (Number(entry.totalHours) || 0), 0);
+  
+  const totalExtraHours = entries.reduce((sum: number, entry: TimeEntryWithFormattedExtras) => 
+    sum + (Number(entry.extraHours) || 0), 0);
 
   // Sort entries by date
-  const sortedEntries = [...entries].sort((a, b) => 
-    new Date(a.date).getTime() - new Date(b.date).getTime()
-  );
+  const sortedEntries = [...entries].sort((a: TimeEntryWithFormattedExtras, b: TimeEntryWithFormattedExtras) => {
+    try {
+      return new Date(a.date).getTime() - new Date(b.date).getTime();
+    } catch (error) {
+      console.error('Error al ordenar fechas:', error);
+      return 0;
+    }
+  });
 
   return (
     <View style={styles.employeeContainer}>
@@ -88,12 +137,18 @@ export const EmployeeTimeEntries: React.FC<EmployeeTimeEntriesProps> = ({
         activeOpacity={0.7}
       >
         <View style={styles.employeeHeaderContent}>
-          <Text style={styles.employeeName}>{employee.name}</Text>
+          <Text style={styles.employeeName}>
+            {employee.name || 'Sin nombre'}
+          </Text>
           <View style={styles.hoursSummary}>
             <Text style={styles.hoursText}>
-              Total: {formatDecimalToTime(totalHours)}
-              {totalExtraHours > 0 && ` (+${formatDecimalToTime(totalExtraHours)} extras)`}
+              {`Total: ${formatDecimalToTime(totalHours)}`}
             </Text>
+            {totalExtraHours > 0 && (
+              <Text style={styles.hoursText}>
+                {` (+${formatDecimalToTime(totalExtraHours)} extras)`}
+              </Text>
+            )}
           </View>
         </View>
         <Ionicons 
@@ -105,72 +160,55 @@ export const EmployeeTimeEntries: React.FC<EmployeeTimeEntriesProps> = ({
 
       {expanded && (
         <View style={styles.entriesContainer}>
-          {sortedEntries.map((entry, index) => (
-            <View key={`${entry._id}-${index}`} style={styles.entryContainer}>
+          {sortedEntries.map((entry) => (
+            <View key={entry._id} style={styles.entryContainer}>
               <View style={styles.entryHeader}>
                 <Text style={styles.entryDate}>
-                  {(() => {
-                    try {
-                      if (entry.date) {
-                        // Extraer la fecha directamente del string sin conversión de zona horaria
-                        if (typeof entry.date === 'string') {
-                          let dateStr = entry.date;
-                          
-                          // Si es un timestamp ISO, extraer solo la parte de la fecha
-                          if (dateStr.includes('T')) {
-                            dateStr = dateStr.split('T')[0];
-                          }
-                          
-                          // Asegurarse de que el formato sea YYYY-MM-DD
-                          const dateMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-                          if (dateMatch) {
-                            const [, year, month, day] = dateMatch.map(Number);
-                            // Crear la fecha local para el cálculo del día de la semana
-                            const localDate = new Date(year, month - 1, day);
-                            
-                            if (!isNaN(localDate.getTime())) {
-                              // Obtener el día de la semana en portugués
-                              const dayOfWeek = format(localDate, 'EEEE', { locale: ptBR });
-                              // Formatear la fecha como DD-MM-YYYY
-                              const formattedDate = [
-                                String(day).padStart(2, '0'),
-                                String(month).padStart(2, '0'),
-                                year
-                              ].join('-');
-                              
-                              // Capitalizar la primera letra del día de la semana
-                              const capitalizedDay = dayOfWeek.charAt(0).toUpperCase() + dayOfWeek.slice(1);
-                              return `${capitalizedDay} ${formattedDate}`;
-                            }
-                          }
-                        }
-                      }
-                      return 'Fecha no disponible';
-                    } catch (error) {
-                      console.error('Error al formatear fecha:', { date: entry.date, error });
-                      return 'Fecha inválida';
-                    }
-                  })()}
+                  {formatDate(entry.date)}
                 </Text>
                 <Text style={styles.entryTotal}>
-                  {formatDecimalToTime(entry.totalHours || 0)}
+                  {formatDecimalToTime(Number(entry.totalHours) || 0)}
                 </Text>
               </View>
               <View style={styles.timeRange}>
                 <Text style={styles.timeText}>
-                  {formatTime(entry.entryTime)} - {entry.exitTime ? formatTime(entry.exitTime) : '--:--'}
+                  {entry.entryTime ? formatTime(entry.entryTime) : '--:--'} - {entry.exitTime ? formatTime(entry.exitTime) : '--:--'}
                 </Text>
-                {entry.extraHours && entry.extraHours > 0 && (
+                {entry.extraHours && Number(entry.extraHours) > 0 && (
                   <Text style={styles.extraHoursText}>
-                    +{formatDecimalToTime(entry.extraHours)}
+                    +{formatDecimalToTime(Number(entry.extraHours))}
                   </Text>
                 )}
               </View>
-              {entry.notes && (
-                <View style={styles.notesContainer}>
-                  <Text style={styles.notesText}>{entry.notes}</Text>
-                </View>
-              )}
+              <View style={styles.notesContainer}>
+                {(() => {
+                  try {
+                    // Asegurarse de que notes sea un string válido
+                    const notesText = String(entry.notes || '').trim();
+                    const isEmpty = !notesText;
+                    
+                    return (
+                      <Text 
+                        style={[
+                          styles.notesText, 
+                          isEmpty && { color: '#9CA3AF', fontStyle: 'italic' }
+                        ]}
+                        numberOfLines={2}
+                        ellipsizeMode="tail"
+                      >
+                        {isEmpty ? 'Sin notas' : notesText.substring(0, 100)}
+                      </Text>
+                    );
+                  } catch (error) {
+                    console.error('Error al renderizar notas:', error);
+                    return (
+                      <Text style={[styles.notesText, { color: '#9CA3AF', fontStyle: 'italic' }]}>
+                        Sin notas
+                      </Text>
+                    );
+                  }
+                })()}
+              </View>
             </View>
           ))}
         </View>
@@ -261,8 +299,15 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   notesText: {
-    fontSize: 13,
+    fontSize: 14,
     color: '#666',
     fontStyle: 'italic',
+    flexShrink: 1,
+    flexWrap: 'wrap',
+    alignSelf: 'stretch',
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
 });
+
+export default EmployeeTimeEntries;
