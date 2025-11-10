@@ -3,7 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 
 const api = axios.create({
   // URL del backend en producción
-  baseURL: 'https://control-funcionarios-production.up.railway.app',
+  baseURL: 'https://control-funcionarios.onrender.com',
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
