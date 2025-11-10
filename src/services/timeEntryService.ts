@@ -239,11 +239,48 @@ export const formatTimeEntryForDisplay = (entry: TimeEntry): TimeEntryFormatted 
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
   };
 
+  // Función para obtener el nombre del empleado de forma segura
+  const getEmployeeName = (employee: any): string => {
+    if (!employee) return 'Empleado desconocido';
+    
+    // Si es un string, asumimos que es el ID
+    if (typeof employee === 'string') return `Empleado ${employee.substring(0, 6)}...`;
+    
+    // Si es un objeto, intentar extraer el nombre
+    if (typeof employee === 'object') {
+      // Si tiene la propiedad 'name' directa
+      if (employee.name) return employee.name;
+      
+      // Si tiene first_name y last_name
+      if (employee.first_name || employee.last_name) {
+        return `${employee.first_name || ''} ${employee.last_name || ''}`.trim();
+      }
+      
+      // Si tiene firstName y lastName (camelCase)
+      if (employee.firstName || employee.lastName) {
+        return `${employee.firstName || ''} ${employee.lastName || ''}`.trim();
+      }
+      
+      // Si no se puede determinar el nombre, devolver un ID o indicador
+      if (employee._id) return `Empleado ${String(employee._id).substring(0, 6)}...`;
+      if (employee.id) return `Empleado ${String(employee.id).substring(0, 6)}...`;
+      
+      // Si es un objeto sin propiedades útiles, devolver un string genérico
+      return 'Empleado';
+    }
+    
+    return 'Empleado';
+  };
+
+  // Obtener el nombre del empleado
+  const employeeName = getEmployeeName(entry.employee);
+  
   // Usar totalHours como horas regulares si está disponible
   // Si no, calcular a partir de las horas de entrada/salida
   let regularHours = entry.totalHours || 0;
 
-  return {
+  // Crear un nuevo objeto con las propiedades formateadas
+  const formattedEntry: any = {
     ...entry,
     date: formatMongoDate(entry.date, 'yyyy-MM-dd'),
     entryTime: formatMongoDate(entry.entryTime, 'HH:mm'),
@@ -251,8 +288,26 @@ export const formatTimeEntryForDisplay = (entry: TimeEntry): TimeEntryFormatted 
     extraHoursFormatted: formatHours(entry.extraHours),
     regularHours, // Incluir las horas regulares calculadas
     createdAt: entry.createdAt.$date,
-    updatedAt: entry.updatedAt.$date
+    updatedAt: entry.updatedAt.$date,
+    // Agregar el nombre del empleado como una propiedad separada para facilitar el acceso
+    employeeName: employeeName
   };
+
+  // Si el empleado es un objeto, mantenerlo como está
+  if (typeof entry.employee === 'object' && entry.employee !== null) {
+    formattedEntry.employee = {
+      ...entry.employee,
+      name: employeeName
+    };
+  } else {
+    // Si es un string, convertirlo a un objeto con _id y name
+    formattedEntry.employee = {
+      _id: entry.employee,
+      name: employeeName
+    };
+  }
+
+  return formattedEntry;
 };
 
 /**
