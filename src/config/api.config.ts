@@ -1,6 +1,6 @@
 // Production configuration
 const API_CONFIG = {
-  API_URL: 'https://control-funcionarios.onrender.com',
+  API_URL: 'https://control-funcionarios-1406c5819e1f.herokuapp.com',
   NODE_ENV: 'production' as const,
 };
 
