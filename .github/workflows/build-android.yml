@@ -71,6 +71,7 @@ jobs:
 
       - name: Build Android APKs with Gradle
         run: |
+          chmod +x android/gradlew
           android/gradlew -p android assembleRelease
 
       - name: Upload APK artifacts
