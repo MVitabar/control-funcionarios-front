@@ -28,6 +28,13 @@
       },
       "channel": "production"
     },
+    "production-split": {
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease -Pandroid.splits.abi=true"
+      },
+      "channel": "production"
+    },
     "production-aab": {
       "android": {
         "buildType": "app-bundle"
