@@ -55,6 +55,9 @@ jobs:
       - name: Install EAS CLI
         run: npm install -g eas-cli
 
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Cache Gradle
         uses: actions/cache@v4
         with:
@@ -66,19 +69,15 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      - name: Build Android APKs
+      - name: Build Android APKs with Gradle
         run: |
-          PROFILE="${{ github.event.inputs.profile || 'production-split' }}"
-          eas build --profile $PROFILE --platform android --non-interactive
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          cd android
+          ./gradlew assembleRelease
 
       - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: android-apks
-          path: |
-            *.apk
-            build/**/*.apk
+          path: android/app/build/outputs/apk/release/*.apk
           retention-days: 30
