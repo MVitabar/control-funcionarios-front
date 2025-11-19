@@ -31,7 +31,15 @@
     "production-split": {
       "android": {
         "buildType": "apk",
-        "gradleCommand": ":app:assembleRelease -Pandroid.splits.abi=true"
+        "gradleCommand": ":app:assembleRelease",
+        "splits": {
+          "abi": {
+            "enable": true,
+            "reset": true,
+            "include": ["arm64-v8a", "armeabi-v7a", "x86", "x86_64"],
+            "universalApk": false
+          }
+        }
       },
       "channel": "production"
     },
