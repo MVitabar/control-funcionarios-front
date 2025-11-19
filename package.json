@@ -29,7 +29,6 @@
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",
     "dotenv": "^17.2.3",
-    "eas-cli": "^16.27.0",
     "expo": "^54.0.22",
     "expo-constants": "~18.0.10",
     "expo-file-system": "~19.0.17",
