@@ -269,7 +269,8 @@ export default function TimeEntryScreen() {
         total: total,
         notes: formData.notes || "",
         status: 'pending',
-        extraHoursFormatted: `${formData.extraHoursTime.getHours().toString().padStart(2, '0')}:${formData.extraHoursTime.getMinutes().toString().padStart(2, '0')}`
+        extraHoursFormatted: `${formData.extraHoursTime.getHours().toString().padStart(2, '0')}:${formData.extraHoursTime.getMinutes().toString().padStart(2, '0')}`,
+        extraHours: formData.extraHoursTime.getHours() + (formData.extraHoursTime.getMinutes() / 60)
         // El backend calculará automáticamente las horas trabajadas basadas en entryTime y exitTime
       };
 

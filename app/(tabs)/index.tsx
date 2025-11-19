@@ -27,6 +27,7 @@ export default function DashboardScreen() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Estilos que dependen del tema
   const dynamicStyles = StyleSheet.create({
@@ -67,11 +68,20 @@ export default function DashboardScreen() {
 
   const loadEmployees = async () => {
     try {
+      setError(null); // Clear previous errors
       const data = await employeeService.getEmployees();
       setEmployees(data);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al cargar empleados:', error);
-      // Mostrar mensaje de error al usuario
+
+      // Determine error type and set appropriate message
+      if (error.response?.status === 401) {
+        setError('Sesión expirada. Por favor, inicia sesión nuevamente.');
+      } else if (error.message === 'Network Error' || !error.response) {
+        setError('Error de conexión. Verifica tu conexión a internet y que el servidor esté disponible.');
+      } else {
+        setError('Error al cargar empleados. Por favor, intenta nuevamente.');
+      }
     } finally {
       setIsLoading(false);
       setRefreshing(false);
@@ -228,6 +238,23 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Error Display */}
+        {error && (
+          <View style={[styles.errorContainer, { backgroundColor: '#ffebee', borderColor: '#ef5350' }]}>
+            <View style={styles.errorContent}>
+              <Ionicons name="alert-circle" size={24} color="#ef5350" />
+              <ThemedText style={[styles.errorText, { color: '#c62828' }]}>{error}</ThemedText>
+            </View>
+            <TouchableOpacity
+              style={[styles.retryButton, { backgroundColor: '#ef5350' }]}
+              onPress={loadEmployees}
+            >
+              <Ionicons name="refresh" size={18} color="#fff" />
+              <ThemedText style={styles.retryButtonText}>Reintentar</ThemedText>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Lista de Empleados */}
         <ThemedText style={styles.sectionTitle}>Funcionários</ThemedText>
         {isLoading ? (
@@ -378,5 +405,36 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     elevation: 6,
     zIndex: 10,
+  },
+  errorContainer: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 12,
+  },
+  errorContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  errorText: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    borderRadius: 8,
+    gap: 8,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
   },
 });

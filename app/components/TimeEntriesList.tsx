@@ -33,10 +33,26 @@ const extractId = (id: unknown): string => {
 
 // Format decimal hours to HH:mm format
 const formatDecimalToTime = (decimalHours: number): string => {
-  if (isNaN(decimalHours)) return '00:00';
+  if (isNaN(decimalHours) || decimalHours === 0) return '00:00';
   const hours = Math.floor(decimalHours);
   const minutes = Math.round((decimalHours - hours) * 60);
   return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+};
+
+// Convert extraHoursFormatted to decimal if needed
+const getExtraHoursAsDecimal = (entry: TimeEntry): number => {
+  // Si ya tiene extraHours como número, usarlo
+  if (entry.extraHours && typeof entry.extraHours === 'number') {
+    return entry.extraHours;
+  }
+  
+  // Si solo tiene extraHoursFormatted, convertirlo a decimal
+  if (entry.extraHoursFormatted) {
+    const [hours, minutes] = entry.extraHoursFormatted.split(':').map(Number);
+    return hours + (minutes || 0) / 60;
+  }
+  
+  return 0;
 };
 
 // Extended TimeEntry type with formatted fields for display
@@ -226,6 +242,7 @@ const TimeEntriesList: React.FC<TimeEntriesListProps> = ({ employeeId }): React.
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
         employeeId,
+        includeDetails: true,
       });
 
       // Format entries with additional display fields
@@ -233,7 +250,7 @@ const TimeEntriesList: React.FC<TimeEntriesListProps> = ({ employeeId }): React.
         // Convert numeric fields to numbers
         const totalHours = typeof entry.totalHours === 'string' ? parseFloat(entry.totalHours) : (entry.totalHours || 0);
         const regularHours = typeof entry.regularHours === 'string' ? parseFloat(entry.regularHours) : (entry.regularHours || 0);
-        const extraHours = typeof entry.extraHours === 'string' ? parseFloat(entry.extraHours) : (entry.extraHours || 0);
+        const extraHours = getExtraHoursAsDecimal(entry);
         const total = typeof entry.total === 'string' ? parseFloat(entry.total) : (entry.total || 0);
 
         // Handle dates

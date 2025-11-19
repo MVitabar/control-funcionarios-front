@@ -29,15 +29,15 @@ api.interceptors.response.use(
           // Transform _id.$oid to id
           if (key === '_id' && data[key] && data[key].$oid) {
             transformed.id = data[key].$oid;
-          } 
+          }
           // Transform dates
           else if ((key.endsWith('At') || key === 'date' || key === 'entryTime' || key === 'exitTime') && data[key] && data[key].$date) {
             transformed[key] = new Date(data[key].$date);
-          } 
+          }
           // Transform nested objects
           else if (typeof data[key] === 'object' && data[key] !== null) {
             transformed[key] = transformResponse(data[key]);
-          } 
+          }
           // Keep other values as is
           else {
             transformed[key] = data[key];
@@ -76,12 +76,17 @@ api.interceptors.request.use(async (config) => {
       // Create new headers object if it doesn't exist
       config.headers = config.headers || {};
       config.headers.Authorization = `Bearer ${token}`;
+      console.log('✅ Auth token found and added to request:', config.url || 'unknown');
+    } else {
+      console.warn('⚠️ No auth token found for request:', config.url || 'unknown');
     }
+    console.log('📡 Making request to:', (config.baseURL || '') + (config.url || ''));
   } catch (error) {
-    console.error('Error getting auth token:', error);
+    console.error('❌ Error getting auth token:', error);
   }
   return config;
 }, (error) => {
+  console.error('❌ Request interceptor error:', error);
   return Promise.reject(error);
 });
 

@@ -32,6 +32,7 @@ export interface TimeEntry {
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   dailyRate?: number;             // Tarifa diaria (opcional)
   extraHours?: number;            // Horas extras (opcional)
+  extraHoursFormatted?: string;   // Horas extras formateadas (opcional)
   extraHoursRate?: number;        // Tarifa de horas extras (opcional)
   total?: number;                 // Total (opcional)
   totalHours?: number | string;   // Total de horas (puede ser número o string)
@@ -54,6 +55,7 @@ export interface TimeEntryCreateData {
   notes?: string;
   dailyRate?: number;
   extraHoursRate?: number;
+  extraHoursFormatted?: string;
   status?: 'PENDING' | 'APPROVED' | 'REJECTED';
 }
 
@@ -66,6 +68,7 @@ export interface TimeEntryUpdateData {
   dailyRate?: number | null;
   extraHours?: number | null;
   extraHoursRate?: number | null;
+  extraHoursFormatted?: string | null;
   totalHours?: number | string | null;
   regularHours?: number | string | null;
   approvedBy?: string | null;     // User ID

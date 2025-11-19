@@ -4,8 +4,25 @@ import { Ionicons } from '@expo/vector-icons';
 import { exportToPDF } from '../../utils/exportUtils';
 import { TimeEntry } from '../../types/api.types';
 
+// Extended TimeEntry type with formatted fields for display
+interface TimeEntryWithFormattedExtras extends Omit<TimeEntry, 'status' | 'notes' | 'totalHours' | 'regularHours' | 'extraHours' | 'total' | 'employee'> {
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  notes: string;
+  totalHours: number;
+  regularHours: number;
+  extraHours: number;
+  total: number;
+  employee: {
+    _id: string;
+    name: string;
+    email?: string | undefined;
+  };
+  extraHoursFormatted: string;
+  [key: string]: any;
+}
+
 export interface ExportButtonProps {
-  data: TimeEntry[];
+  data: TimeEntry[] | TimeEntryWithFormattedExtras[];
   dateRange: { start: Date; end: Date };
   disabled?: boolean;
   compact?: boolean;
