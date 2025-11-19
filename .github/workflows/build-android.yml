@@ -71,7 +71,7 @@ jobs:
 
       - name: Build Android APKs with Gradle
         run: |
-          ./gradlew -p android assembleRelease
+          cd android && ./gradlew assembleRelease
 
       - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
