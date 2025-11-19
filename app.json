@@ -18,6 +18,7 @@
       "enabled": true,
       "checkAutomatically": "ON_LOAD",
       "fallbackToCacheTimeout": 0,
+      "channel": "production",
       "codeSigningCertificate": "./code-signing/certificate.pem",
       "codeSigningMetadata": {
         "keyid": "main",
