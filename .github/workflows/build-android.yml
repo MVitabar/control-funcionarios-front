@@ -70,6 +70,8 @@ jobs:
             ${{ runner.os }}-gradle-
 
       - name: Build Android APKs with Gradle
+        env:
+          NODE_ENV: production
         run: |
           chmod +x android/gradlew
           android/gradlew -p android assembleRelease
