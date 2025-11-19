@@ -8,7 +8,7 @@ type EnvConfig = {
 
 // Default configuration (production)
 const ENV: EnvConfig = {
-  API_URL: 'https://control-funcionarios.onrender.com',
+  API_URL: 'https://control-funcionarios-production.up.railway.app',
   NODE_ENV: 'production',
   // Add other default values here
 };

@@ -23,11 +23,11 @@ export default function DashboardScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const router = useRouter();
-  
+
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  
+
   // Estilos que dependen del tema
   const dynamicStyles = StyleSheet.create({
     header: {
@@ -64,7 +64,7 @@ export default function DashboardScreen() {
       backgroundColor: colors.primary,
     },
   });
-  
+
   const loadEmployees = async () => {
     try {
       const data = await employeeService.getEmployees();
@@ -77,44 +77,44 @@ export default function DashboardScreen() {
       setRefreshing(false);
     }
   };
-  
+
   const handleRefresh = () => {
     setRefreshing(true);
     loadEmployees();
   };
-  
+
   useEffect(() => {
     loadEmployees();
   }, []);
-  
+
   // Dados de estatísticas
   const stats: StatItem[] = [
-    { 
-      title: 'Funcionários', 
-      value: employees.length.toString(), 
+    {
+      title: 'Funcionários',
+      value: employees.length.toString(),
       icon: 'people-outline',
       color: '#4CAF50'
     },
-    { 
-      title: 'Ativos', 
-      value: employees.filter(e => e.isActive).length.toString(), 
+    {
+      title: 'Ativos',
+      value: employees.filter(e => e.isActive).length.toString(),
       icon: 'checkmark-circle-outline',
       color: '#2196F3'
     },
-    { 
-      title: 'Inativos', 
-      value: employees.filter(e => !e.isActive).length.toString(), 
+    {
+      title: 'Inativos',
+      value: employees.filter(e => !e.isActive).length.toString(),
       icon: 'close-circle-outline',
       color: '#9E9E9E'
     },
   ];
 
   // Interfaz QuickAction eliminada ya que no se está utilizando
-// interface QuickAction {
-//   title: string;
-//   icon: string;
-//   onPress: () => void;
-// }
+  // interface QuickAction {
+  //   title: string;
+  //   icon: string;
+  //   onPress: () => void;
+  // }
 
   // Función eliminada ya que no se está utilizando
 
@@ -149,7 +149,7 @@ export default function DashboardScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView 
+      <ScrollView
         style={[styles.scrollView, { backgroundColor: colors.background }]}
         contentContainerStyle={styles.scrollViewContent}
         refreshControl={
@@ -174,15 +174,15 @@ export default function DashboardScreen() {
         <ThemedText style={styles.sectionTitle}>Resumo</ThemedText>
         <View style={styles.statsContainer}>
           {stats.map((stat, index) => (
-            <View 
-              key={index} 
+            <View
+              key={index}
               style={[
-                statCard, 
-                { 
+                statCard,
+                {
                   backgroundColor: colors.card,
                   borderLeftWidth: 4,
                   borderLeftColor: stat.color,
-                  marginRight: index < stats.length - 1 ? 12 : 0 
+                  marginRight: index < stats.length - 1 ? 12 : 0
                 }
               ]}
             >
@@ -207,7 +207,7 @@ export default function DashboardScreen() {
         {/* Acciones Rápidas */}
         <ThemedText style={styles.sectionTitle}>Ações Rápidas</ThemedText>
         <View style={styles.quickActionsContainer}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[dynamicStyles.quickActionButton, { backgroundColor: colors.primary }]}
             onPress={() => router.push({
               pathname: '/(tabs)/add-employee'
@@ -216,8 +216,8 @@ export default function DashboardScreen() {
             <Ionicons name="person-add-outline" size={20} color="#fff" />
             <ThemedText style={styles.quickActionButtonText}>Novo Funcionário</ThemedText>
           </TouchableOpacity>
-          
-          <TouchableOpacity 
+
+          <TouchableOpacity
             style={[dynamicStyles.quickActionButton, { backgroundColor: '#6c5ce7' }]}
             onPress={() => router.push({
               pathname: '/(tabs)/schedule'
@@ -236,20 +236,20 @@ export default function DashboardScreen() {
           </View>
         ) : employees.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons 
-              name="people-outline" 
-              size={48} 
+            <Ionicons
+              name="people-outline"
+              size={48}
               color={colors.secondaryText}
               style={{ opacity: 0.5, marginBottom: 16 }}
             />
             <ThemedText style={[styles.emptyText, { color: colors.secondaryText }]}>
               Nenhum funcionário cadastrado
             </ThemedText>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.addButton, { backgroundColor: colors.primary }]}
               onPress={() => router.push({
-              pathname: '/(tabs)/add-employee'
-            } as any)}
+                pathname: '/(tabs)/add-employee'
+              } as any)}
             >
               <Ionicons name="add" size={20} color="#fff" />
               <ThemedText style={styles.addButtonText}>Adicionar Funcionário</ThemedText>
@@ -284,7 +284,7 @@ const styles = StyleSheet.create({
   },
   scrollViewContent: {
     padding: 16,
-    paddingBottom: 32,
+    paddingBottom: 100,  // Increased for bottom navigation clearance
   },
   sectionTitle: {
     fontSize: 18,

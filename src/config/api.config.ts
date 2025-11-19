@@ -1,6 +1,6 @@
 // Production configuration
 const API_CONFIG = {
-  API_URL: 'https://control-funcionarios.onrender.com',
+  API_URL: 'https://control-funcionarios-production.up.railway.app',
   NODE_ENV: 'production' as const,
 };
 

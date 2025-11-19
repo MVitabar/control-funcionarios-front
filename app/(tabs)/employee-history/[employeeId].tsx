@@ -62,7 +62,7 @@ const EmployeeHistoryScreen = () => {
   const { employeeId, employeeName } = useLocalSearchParams();
   const router = useRouter();
   const colorScheme = useColorScheme();
-  
+
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -93,16 +93,16 @@ const EmployeeHistoryScreen = () => {
       border: '#2D2D2D',
       secondaryText: '#a0a0a0',
     },
-  }[colorScheme || 'light'];
+  }[(colorScheme ?? 'light') as 'light' | 'dark'];
 
   // Cargar los registros del empleado
   const loadTimeEntries = useCallback(async (forceRefresh: boolean = false) => {
     try {
       setIsLoading(true);
-      
+
       // Agregar parámetro de caché para forzar la actualización si es necesario
       const url = `/time-entries/employee/${employeeId}${forceRefresh ? `?_t=${Date.now()}` : ''}`;
-      
+
       const response = await apiService.get<ApiResponse<TimeEntry[]> | TimeEntry[]>(url, {
         // Agregar encabezados para evitar el caché
         headers: {
@@ -111,7 +111,7 @@ const EmployeeHistoryScreen = () => {
           'Expires': '0'
         }
       });
-      
+
       // Asegurarse de que la respuesta sea un array
       if (Array.isArray(response)) {
         setTimeEntries(response);
@@ -150,26 +150,26 @@ const EmployeeHistoryScreen = () => {
       if (!dateObj) return '--/--/----';
       const dateString = typeof dateObj === 'string' ? dateObj : dateObj?.$date;
       if (!dateString) return '--/--/----';
-      
+
       // Extraer los componentes de la fecha del string
       const dateParts = dateString.split('T')[0].split('-');
       if (dateParts.length !== 3) return '--/--/----';
-      
+
       const year = parseInt(dateParts[0], 10);
       const month = parseInt(dateParts[1], 10) - 1; // Los meses en JS van de 0 a 11
       const day = parseInt(dateParts[2], 10);
-      
+
       // Crear fecha local (sin usar UTC) para evitar cambios de zona horaria
       const localDate = new Date(year, month, day);
       if (isNaN(localDate.getTime())) return '--/--/----';
-      
+
       // Formatear manualmente para mantener el formato en portugués
       const weekdays = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
       const months = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
-      
+
       const weekday = weekdays[localDate.getUTCDay()];
       const monthName = months[localDate.getUTCMonth()];
-      
+
       return `${weekday} ${localDate.getUTCDate()} de ${monthName} de ${localDate.getUTCFullYear()}`;
     } catch (error) {
       console.error('Error al formatear fecha:', error);
@@ -181,7 +181,7 @@ const EmployeeHistoryScreen = () => {
   const formatTime = (timeObj?: MongoDBDate | string) => {
     try {
       if (!timeObj) return '--:--';
-      
+
       // Obtener el string de tiempo, manejando tanto objetos MongoDBDate como strings directos
       let timeString: string;
       if (typeof timeObj === 'string') {
@@ -191,15 +191,15 @@ const EmployeeHistoryScreen = () => {
       } else {
         return '--:--';
       }
-      
+
       // Extraer directamente las horas y minutos del string ISO 8601 (ej: '2025-11-03T09:00:00.000+00:00')
       // Esto evita problemas de zona horaria al usar el objeto Date
       const timeMatch = timeString.match(/T(\d{2}):(\d{2})/);
       if (!timeMatch) return '--:--';
-      
+
       const hours = timeMatch[1];
       const minutes = timeMatch[2];
-      
+
       return `${hours}:${minutes}`;
     } catch (error) {
       console.error('Error al formatear hora:', error);
@@ -208,27 +208,27 @@ const EmployeeHistoryScreen = () => {
   };
 
   // Calcular totales
-  const calculateTotals = (): { 
-    totalDays: number; 
-    totalEarnings: number; 
+  const calculateTotals = (): {
+    totalDays: number;
+    totalEarnings: number;
     totalExtraHours: number;
     totalHours: number;
   } => {
     // Asegurarse de que timeEntries sea un array antes de usarlo
     const entries = Array.isArray(timeEntries) ? timeEntries : [];
-    
+
     const totalDays = entries.length;
     const totalEarnings = entries.reduce((sum, entry) => sum + (entry?.total || 0), 0);
-    
+
     // Calcular total de horas normales
     const totalRegularHours = entries.reduce((sum, entry) => {
       return sum + (entry?.totalHours || 0);
     }, 0);
-    
+
     // Calcular total de horas extras sumando las horas de cada entrada
     const totalExtraHours = entries.reduce((sum, entry) => {
       if (!entry.extraHoursFormatted) return sum;
-      
+
       try {
         const [hoursStr, minutesStr] = entry.extraHoursFormatted.split(':');
         const hours = parseInt(hoursStr, 10) || 0;
@@ -239,13 +239,13 @@ const EmployeeHistoryScreen = () => {
         return sum;
       }
     }, 0);
-    
+
     // Sumar horas normales y horas extras
     const totalHours = totalRegularHours + totalExtraHours;
-    
-    return { 
-      totalDays, 
-      totalEarnings, 
+
+    return {
+      totalDays,
+      totalEarnings,
       totalExtraHours: parseFloat(totalExtraHours.toFixed(2)),
       totalHours: parseFloat(totalHours.toFixed(2))
     };
@@ -257,11 +257,11 @@ const EmployeeHistoryScreen = () => {
   const handleEditEntry = (entry: TimeEntry) => {
     try {
       console.log('Editando registro:', JSON.stringify(entry, null, 2));
-      
+
       // Función auxiliar para manejar fechas de MongoDB
       const parseMongoDate = (dateValue: any): Date | null => {
         if (!dateValue) return null;
-        
+
         try {
           // Si es un objeto con $date
           if (dateValue.$date) {
@@ -292,13 +292,13 @@ const EmployeeHistoryScreen = () => {
           return null;
         }
       };
-      
+
       // Establecer el registro que se está editando
       setEditingEntry(entry);
-      
+
       // Obtener la fecha base del registro (fecha del día)
       const baseDate = parseMongoDate(entry.date) || new Date();
-      
+
       // Manejar la fecha y hora de entrada
       const entryDate = parseMongoDate(entry.entryTime);
       if (entryDate) {
@@ -311,7 +311,7 @@ const EmployeeHistoryScreen = () => {
         defaultDate.setHours(9, 0, 0, 0);
         setEntryTime(defaultDate);
       }
-      
+
       // Manejar la fecha y hora de salida
       if (entry.exitTime) {
         const exitDate = parseMongoDate(entry.exitTime);
@@ -327,10 +327,10 @@ const EmployeeHistoryScreen = () => {
         console.log('No hay hora de salida en el registro');
         setExitTime(null);
       }
-      
+
       // Establecer las notas si existen
       setNotes(entry.notes || '');
-      
+
       // Mostrar el modal
       setShowEditModal(true);
     } catch (error) {
@@ -352,10 +352,10 @@ const EmployeeHistoryScreen = () => {
     return {
       ...entry,
       _id: { $oid: entry._id },
-      employee: { 
-        $oid: typeof entry.employee === 'string' 
-          ? entry.employee 
-          : entry.employee?._id?.$oid || entry.employee?._id || '' 
+      employee: {
+        $oid: typeof entry.employee === 'string'
+          ? entry.employee
+          : entry.employee?._id?.$oid || entry.employee?._id || ''
       },
       date: ensureMongoDate(entry.date),
       entryTime: ensureMongoDate(entry.entryTime),
@@ -385,11 +385,11 @@ const EmployeeHistoryScreen = () => {
       const entryDate = entryTime instanceof Date && !isNaN(entryTime.getTime())
         ? entryTime
         : new Date();
-      
+
       const exitDate = exitTime instanceof Date && !isNaN(exitTime.getTime())
         ? exitTime
         : null;
-      
+
       // Verificar que la hora de salida sea posterior a la de entrada
       if (exitDate && exitDate < entryDate) {
         Alert.alert('Error', 'La hora de salida debe ser posterior a la hora de entrada');
@@ -398,23 +398,23 @@ const EmployeeHistoryScreen = () => {
 
       // Mostrar indicador de carga
       setIsLoading(true);
-      
+
       // Depuración: Mostrar la estructura completa del registro
       console.log('Estructura completa del registro a editar:', JSON.stringify(editingEntry, null, 2));
-      
+
       // Obtener el ID del registro de la manera más segura posible
       let entryId: string | undefined;
-      
+
       // Extraer el ID del registro de la manera más segura posible
       const idObj = editingEntry._id;
-      
+
       if (typeof idObj === 'string') {
         entryId = idObj;
       } else if (idObj && typeof idObj === 'object') {
         // Si tiene $oid, usamos ese valor
         if ('$oid' in idObj && typeof idObj.$oid === 'string') {
           entryId = idObj.$oid;
-        } 
+        }
         // Si tiene buffer, lo convertimos a string hexadecimal
         else if ('buffer' in idObj && idObj.buffer && typeof idObj.buffer === 'object') {
           const bufferArray = Object.values(idObj.buffer).map(Number);
@@ -427,12 +427,12 @@ const EmployeeHistoryScreen = () => {
           entryId = String(idObj);
         }
       }
-      
+
       // Asegurarse de que el ID sea un string
       entryId = String(entryId);
-      
+
       console.log('ID extraído del registro:', entryId);
-      
+
       if (!entryId) {
         throw new Error('No se pudo obtener un ID válido del registro. Estructura del _id: ' + JSON.stringify(editingEntry._id));
       }
@@ -443,11 +443,11 @@ const EmployeeHistoryScreen = () => {
         exitTime: exitDate ? exitDate.toISOString() : undefined,
         notes: notes.trim() || undefined
       });
-      
+
       // Actualizar el registro - asegurarse de que entryId sea un string
       const entryIdStr = String(entryId);
       console.log('ID como string:', entryIdStr);
-      
+
       // Crear fechas con la zona horaria correcta
       const formatTimeForBackend = (date: Date) => {
         // Asegurarse de que la fecha mantenga la hora local
@@ -465,41 +465,41 @@ const EmployeeHistoryScreen = () => {
         entryTime: formatTimeForBackend(entryDate),
         notes: notes.trim() || undefined
       };
-      
+
       // Solo incluir exitTime si existe
       if (exitDate) {
         updateData.exitTime = formatTimeForBackend(exitDate);
       }
-      
+
       console.log('Actualizando entrada con datos:', updateData);
       const updatedEntry = await updateTimeEntry(entryIdStr, updateData);
-      
+
       console.log('Respuesta de actualización:', updatedEntry);
-      
+
       // Convertir la entrada actualizada al formato del componente
       const updatedTimeEntry = convertToComponentTimeEntry({
         ...updatedEntry,
         // Asegurarse de que los campos opcionales estén presentes
         regularHours: updatedEntry.regularHours || 0,
         extraHours: updatedEntry.extraHours || 0,
-        extraHoursFormatted: updatedEntry.extraHoursFormatted || '00:00',
+        extraHoursFormatted: (updatedEntry as any).extraHoursFormatted || '00:00',
         total: updatedEntry.total || 0,
         status: updatedEntry.status || 'pending'
       });
-      
+
       // Actualizar el estado local con los datos actualizados
-      setTimeEntries(prevEntries => 
-        prevEntries.map(entry => 
+      setTimeEntries((prevEntries: TimeEntry[]) =>
+        prevEntries.map((entry: TimeEntry) =>
           String(entry._id.$oid) === entryIdStr ? updatedTimeEntry : entry
         )
       );
-      
+
       // Cerrar el modal
       setShowEditModal(false);
-      
+
       // Mostrar mensaje de éxito
       Alert.alert('Éxito', 'El registro ha sido actualizado correctamente.');
-      
+
       // Limpiar el estado de edición
       setEditingEntry(null);
       setEntryTime(new Date());
@@ -524,15 +524,15 @@ const EmployeeHistoryScreen = () => {
 
   // Renderizar cada elemento de la lista
   const renderTimeEntry = ({ item }: { item: TimeEntry }) => (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={[styles.entryCard, { backgroundColor: colors.card, borderColor: colors.border }]}
       onPress={() => handleEditEntry(item)}
       activeOpacity={0.7}
     >
       <View style={styles.entryHeader}>
         <Text style={[styles.entryDate, { color: colors.primary }]}>{formatDate(item.date)}</Text>
-        <TouchableOpacity 
-          onPress={(e) => {
+        <TouchableOpacity
+          onPress={(e: any) => {
             e.stopPropagation();
             handleEditEntry(item);
           }}
@@ -542,19 +542,19 @@ const EmployeeHistoryScreen = () => {
           <Ionicons name="create-outline" size={18} color={colors.primary} />
         </TouchableOpacity>
       </View>
-      
+
       <View style={styles.entryTimes}>
         <View style={styles.timeBlock}>
           <Text style={[styles.timeLabel, { color: colors.secondaryText }]}>Entrada</Text>
           <Text style={[styles.timeValue, { color: colors.text }]}>{formatTime(item.entryTime)}</Text>
         </View>
-        
+
         <View style={styles.timeBlock}>
           <Text style={[styles.timeLabel, { color: colors.secondaryText }]}>Salida</Text>
           <Text style={[styles.timeValue, { color: colors.text }]}>{formatTime(item.exitTime)}</Text>
         </View>
       </View>
-      
+
       {/* Sección de horas */}
       <View style={styles.hoursContainer}>
         <View style={styles.hourBlock}>
@@ -563,7 +563,7 @@ const EmployeeHistoryScreen = () => {
             {item.extraHoursFormatted || '00:00'}
           </Text>
         </View>
-        
+
         <View style={[styles.hourBlock, { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 8 }]}>
           <Text style={[styles.hourLabel, { color: colors.primary, fontWeight: '600' }]}>Total</Text>
           <Text style={[styles.hourValue, { color: colors.primary, fontWeight: '600' }]}>
@@ -571,7 +571,7 @@ const EmployeeHistoryScreen = () => {
           </Text>
         </View>
       </View>
-      
+
       {item.notes && (
         <View style={styles.notesContainer}>
           <Ionicons name="document-text-outline" size={16} color={colors.secondaryText} />
@@ -580,7 +580,7 @@ const EmployeeHistoryScreen = () => {
           </Text>
         </View>
       )}
-      
+
       <View style={styles.entryFooter}>
         <Text style={[styles.timeValue, { color: colors.text, fontSize: 14 }]}>
           Total: R$ {item.total?.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0,00'}
@@ -600,11 +600,11 @@ const EmployeeHistoryScreen = () => {
   // Función para formatear la hora en formato HH:mm sin conversión de zona horaria
   const formatTimeUTC = (date: Date | null): string => {
     if (!date || !(date instanceof Date) || isNaN(date.getTime())) return '--:--';
-    
+
     // Obtener horas y minutos en UTC
     const hours = date.getUTCHours().toString().padStart(2, '0');
     const minutes = date.getUTCMinutes().toString().padStart(2, '0');
-    
+
     return `${hours}:${minutes}`;
   };
 
@@ -612,12 +612,12 @@ const EmployeeHistoryScreen = () => {
   const renderEditModal = () => {
     console.log('Renderizando modal con entryTime (UTC):', entryTime);
     console.log('Renderizando modal con exitTime (UTC):', exitTime);
-    
+
     // Asegurarse de que entryTime siempre tenga un valor válido (sin conversión de zona horaria)
     const safeEntryTime = entryTime && entryTime instanceof Date && !isNaN(entryTime.getTime())
       ? new Date(entryTime) // Crear una nueva instancia para evitar mutaciones
       : new Date();
-      
+
     // Asegurarse de que exitTime sea una fecha válida o null (sin conversión de zona horaria)
     const safeExitTime = exitTime && exitTime instanceof Date && !isNaN(exitTime.getTime())
       ? new Date(exitTime) // Crear una nueva instancia para evitar mutaciones
@@ -635,10 +635,10 @@ const EmployeeHistoryScreen = () => {
             <Text style={[styles.modalTitle, { color: colors.text }]}>
               Editar Registro
             </Text>
-            
+
             <View style={styles.inputGroup}>
               <Text style={[styles.inputLabel, { color: colors.text }]}>Hora de Entrada</Text>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.timeInput, { borderColor: colors.border }]}
                 onPress={() => setShowEntryTimePicker(true)}
               >
@@ -651,12 +651,13 @@ const EmployeeHistoryScreen = () => {
                   value={safeEntryTime}
                   mode="time"
                   display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                  onChange={(event, selectedDate) => {
+                  onChange={(event: any, selectedDate?: Date) => {
                     setShowEntryTimePicker(Platform.OS === 'ios');
                     if (selectedDate) {
-                      // Mantener la fecha original pero actualizar solo la hora
+                      // Tomar las horas y minutos seleccionados y establecerlos en UTC
+                      // Esto preserva la hora exacta sin conversión de zona horaria
                       const newTime = new Date(safeEntryTime);
-                      newTime.setUTCHours(selectedDate.getHours(), selectedDate.getMinutes());
+                      newTime.setUTCHours(selectedDate.getHours(), selectedDate.getMinutes(), 0, 0);
                       setEntryTime(newTime);
                       console.log('Nueva hora de entrada (UTC):', newTime.toISOString());
                     }
@@ -664,10 +665,10 @@ const EmployeeHistoryScreen = () => {
                 />
               )}
             </View>
-            
+
             <View style={styles.inputGroup}>
               <Text style={[styles.inputLabel, { color: colors.text }]}>Hora de Salida</Text>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.timeInput, { borderColor: colors.border }]}
                 onPress={() => setShowExitTimePicker(true)}
               >
@@ -680,13 +681,14 @@ const EmployeeHistoryScreen = () => {
                   value={safeExitTime || new Date()}
                   mode="time"
                   display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                  onChange={(event, selectedDate) => {
+                  onChange={(event: any, selectedDate?: Date) => {
                     setShowExitTimePicker(Platform.OS === 'ios');
                     if (selectedDate) {
                       // Si no hay hora de salida, usar la fecha de entrada como base
+                      // Tomar las horas y minutos seleccionados y establecerlos en UTC
                       const baseDate = safeExitTime || safeEntryTime;
                       const newTime = new Date(baseDate);
-                      newTime.setUTCHours(selectedDate.getHours(), selectedDate.getMinutes());
+                      newTime.setUTCHours(selectedDate.getHours(), selectedDate.getMinutes(), 0, 0);
                       setExitTime(newTime);
                       console.log('Nueva hora de salida (UTC):', newTime.toISOString());
                     }
@@ -694,14 +696,14 @@ const EmployeeHistoryScreen = () => {
                 />
               )}
             </View>
-            
+
             <View style={styles.inputGroup}>
               <Text style={[styles.inputLabel, { color: colors.text }]}>Notas</Text>
               <TextInput
-                style={[styles.notesInput, { 
-                  borderColor: colors.border, 
+                style={[styles.notesInput, {
+                  borderColor: colors.border,
                   color: colors.text,
-                  backgroundColor: colors.card 
+                  backgroundColor: colors.card
                 }]}
                 value={notes}
                 onChangeText={setNotes}
@@ -711,15 +713,15 @@ const EmployeeHistoryScreen = () => {
                 numberOfLines={3}
               />
             </View>
-            
+
             <View style={styles.modalButtons}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.modalButton, { borderColor: colors.border }]}
                 onPress={() => setShowEditModal(false)}
               >
                 <Text style={{ color: colors.text }}>Cancelar</Text>
               </TouchableOpacity>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.modalButton, { backgroundColor: colors.primary }]}
                 onPress={handleSaveChanges}
               >
@@ -745,8 +747,8 @@ const EmployeeHistoryScreen = () => {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Encabezado */}
       <View style={[styles.header, { backgroundColor: colors.primary }]}>
-        <TouchableOpacity 
-          onPress={() => router.back()} 
+        <TouchableOpacity
+          onPress={() => router.back()}
           style={styles.backButton}
         >
           <Ionicons name="arrow-back" size={24} color="#fff" />
@@ -765,8 +767,8 @@ const EmployeeHistoryScreen = () => {
       </View>
 
       {/* Filtros */}
-      <ScrollView 
-        horizontal 
+      <ScrollView
+        horizontal
         showsHorizontalScrollIndicator={false}
         style={styles.filterContainer}
         contentContainerStyle={styles.filterContent}
@@ -785,7 +787,7 @@ const EmployeeHistoryScreen = () => {
             ]}
             onPress={() => setSelectedFilter(filter.id as any)}
           >
-            <Text 
+            <Text
               style={[
                 styles.filterButtonText,
                 { color: selectedFilter === filter.id ? '#fff' : colors.text }
@@ -827,7 +829,7 @@ const EmployeeHistoryScreen = () => {
       <FlatList
         data={timeEntries}
         renderItem={renderTimeEntry}
-        keyExtractor={(item, index) => {
+        keyExtractor={(item: TimeEntry, index: number) => {
           // Usar el _id si existe, de lo contrario usar el índice como último recurso
           const id = item?._id?.$oid || `index-${index}`;
           return `entry-${id}`;
@@ -852,7 +854,7 @@ const EmployeeHistoryScreen = () => {
             <Text style={[styles.emptyText, { color: colors.secondaryText }]}>
               No hay registros para mostrar
             </Text>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.refreshButton, { borderColor: colors.primary }]}
               onPress={handleRefresh}
             >
@@ -960,7 +962,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 16,
-    paddingBottom: 32,
+    paddingBottom: 100,  // Increased for bottom navigation clearance
   },
   entryCard: {
     borderRadius: 12,

@@ -48,14 +48,14 @@ interface TimeEntryWithFormattedExtras extends Omit<TimeEntry, 'status' | 'notes
   regularHours: number;
   extraHours: number;
   total: number;
-  
+
   // Override employee to ensure required fields
   employee: {
     _id: string;
     name: string;
     email?: string | undefined;
   };
-  
+
   // Formatted fields for display
   formattedDate: string;
   formattedEntryTime: string;
@@ -66,7 +66,7 @@ interface TimeEntryWithFormattedExtras extends Omit<TimeEntry, 'status' | 'notes
   formattedTotal: string;
   extraHoursFormatted: string;
   employeeName: string;
-  
+
   // Make all other fields optional to match the base TimeEntry
   [key: string]: any;
 }
@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 16,
   },
-  
+
   // Sections
   section: {
     backgroundColor: '#fff',
@@ -118,7 +118,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  
+
   // Typography
   sectionTitle: {
     fontSize: 18,
@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     textAlign: 'center',
   },
-  
+
   // Buttons
   retryButton: {
     backgroundColor: '#1976d2',
@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
   exportButtonContainer: {
     marginLeft: 10,
   },
-  
+
   // Date Picker
   filterContainer: {
     padding: 10,
@@ -204,30 +204,30 @@ const TimeEntriesList: React.FC<TimeEntriesListProps> = ({ employeeId }): React.
     date.setDate(1); // First day of current month
     return date;
   });
-  
+
   const [endDate, setEndDate] = useState<Date>(() => {
     const date = new Date();
     date.setMonth(date.getMonth() + 1);
     date.setDate(0); // Last day of current month
     return date;
   });
-  
+
   const [showStartDatePicker, setShowStartDatePicker] = useState<boolean>(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState<boolean>(false);
   const [expandedEmployees, setExpandedEmployees] = useState<Record<string, boolean>>({});
-  
+
   // Fetch time entries
   const fetchEntries = useCallback(async (): Promise<void> => {
     try {
       setLoading(true);
       setError(null);
-      
+
       const entriesData = await getTimeEntries({
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
         employeeId,
       });
-      
+
       // Format entries with additional display fields
       const formattedEntries = entriesData.map((entry: TimeEntry): TimeEntryWithFormattedExtras => {
         // Convert numeric fields to numbers
@@ -235,12 +235,12 @@ const TimeEntriesList: React.FC<TimeEntriesListProps> = ({ employeeId }): React.
         const regularHours = typeof entry.regularHours === 'string' ? parseFloat(entry.regularHours) : (entry.regularHours || 0);
         const extraHours = typeof entry.extraHours === 'string' ? parseFloat(entry.extraHours) : (entry.extraHours || 0);
         const total = typeof entry.total === 'string' ? parseFloat(entry.total) : (entry.total || 0);
-        
+
         // Handle dates
         const entryDate = new Date(entry.date);
         const entryDateTime = entry.entryTime ? new Date(entry.entryTime) : null;
         const exitDateTime = entry.exitTime ? new Date(entry.exitTime) : null;
-        
+
         // Create new object with proper types
         const formattedEntry: TimeEntryWithFormattedExtras = {
           ...entry,
@@ -264,10 +264,10 @@ const TimeEntriesList: React.FC<TimeEntriesListProps> = ({ employeeId }): React.
           extraHoursFormatted: formatDecimalToTime(extraHours),
           employeeName: entry.employee?.name || 'Empleado sin nombre',
         };
-        
+
         return formattedEntry;
       });
-      
+
       setEntries(formattedEntries);
     } catch (err) {
       console.error('Error fetching time entries:', err);
@@ -282,14 +282,14 @@ const TimeEntriesList: React.FC<TimeEntriesListProps> = ({ employeeId }): React.
     try {
       setLoadingEmployees(true);
       const data = await employeeService.getEmployees();
-      
+
       if (JSON.stringify(employeesRef.current) !== JSON.stringify(data)) {
         const formattedEmployees = data.map(emp => ({
           _id: emp._id || emp.id || '',
           name: emp.name || 'Empleado sin nombre',
           email: emp.email || '',
         }));
-        
+
         setEmployees(formattedEmployees);
         employeesRef.current = formattedEmployees;
       }
@@ -306,7 +306,7 @@ const TimeEntriesList: React.FC<TimeEntriesListProps> = ({ employeeId }): React.
     const loadData = async () => {
       await Promise.all([fetchEntries(), fetchEmployees()]);
     };
-    
+
     loadData();
   }, [fetchEntries, fetchEmployees]);
 
@@ -321,7 +321,7 @@ const TimeEntriesList: React.FC<TimeEntriesListProps> = ({ employeeId }): React.
   // Filter and group entries for rendering with proper type safety
   const filteredAndGroupedEntries = useMemo(() => {
     // First filter by date range and selected employee
-    const filtered = selectedEmployeeId 
+    const filtered = selectedEmployeeId
       ? entries.filter(entry => entry.employee?._id === selectedEmployeeId)
       : entries;
 
@@ -330,14 +330,14 @@ const TimeEntriesList: React.FC<TimeEntriesListProps> = ({ employeeId }): React.
     filtered.forEach(entry => {
       try {
         if (!entry || !entry.employee) return;
-        
+
         const employeeId = extractId(entry.employee._id || entry.employee);
         if (!employeeId) return;
-        
+
         if (!grouped[employeeId]) {
           grouped[employeeId] = [];
         }
-        
+
         grouped[employeeId].push(entry);
       } catch (error) {
         console.error('Error processing entry:', error);
@@ -360,21 +360,21 @@ const TimeEntriesList: React.FC<TimeEntriesListProps> = ({ employeeId }): React.
   const renderDateRangeSelector = (): JSX.Element => (
     <View style={styles.filterContainer}>
       <View style={styles.dateFilterContainer}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.dateButton}
           onPress={() => setShowStartDatePicker(true)}
         >
           <Text>Inicio: {format(startDate, 'dd/MM/yyyy')}</Text>
         </TouchableOpacity>
-        
-        <TouchableOpacity 
+
+        <TouchableOpacity
           style={styles.dateButton}
           onPress={() => setShowEndDatePicker(true)}
         >
           <Text>Fin: {format(endDate, 'dd/MM/yyyy')}</Text>
         </TouchableOpacity>
       </View>
-      
+
       <View style={styles.employeeFilterContainer}>
         <Text style={styles.filterLabel}>Filtrar por empleado:</Text>
         <View style={styles.pickerContainer}>
@@ -385,16 +385,16 @@ const TimeEntriesList: React.FC<TimeEntriesListProps> = ({ employeeId }): React.
           >
             <Picker.Item label="Todos los empleados" value="" />
             {employees.map(employee => (
-              <Picker.Item 
-                key={employee._id} 
-                label={employee.name} 
-                value={employee._id} 
+              <Picker.Item
+                key={employee._id}
+                label={employee.name}
+                value={employee._id}
               />
             ))}
           </Picker>
         </View>
       </View>
-      
+
       {showStartDatePicker && (
         <DateTimePicker
           value={startDate}
@@ -410,7 +410,7 @@ const TimeEntriesList: React.FC<TimeEntriesListProps> = ({ employeeId }): React.
           locale="pt-BR"
         />
       )}
-      
+
       {showEndDatePicker && (
         <DateTimePicker
           value={endDate}
@@ -443,7 +443,7 @@ const TimeEntriesList: React.FC<TimeEntriesListProps> = ({ employeeId }): React.
     return (
       <View style={styles.errorContainer}>
         <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.retryButton}
           onPress={() => {
             fetchEntries();
@@ -464,7 +464,7 @@ const TimeEntriesList: React.FC<TimeEntriesListProps> = ({ employeeId }): React.
         <View style={styles.headerContainer}>
           <Text style={styles.sectionTitle}>Período</Text>
           <View style={styles.exportButtonContainer}>
-            <ExportButton 
+            <ExportButton
               data={filteredAndGroupedEntries.flatMap(group => group.entries)}
               dateRange={{ start: startDate, end: endDate }}
               disabled={loading || loadingEmployees || filteredAndGroupedEntries.length === 0}
@@ -475,18 +475,18 @@ const TimeEntriesList: React.FC<TimeEntriesListProps> = ({ employeeId }): React.
         </View>
         {renderDateRangeSelector()}
       </View>
-      
+
       {/* Entries list */}
       <ScrollView style={styles.listContent}>
         {filteredAndGroupedEntries.length > 0 ? (
-filteredAndGroupedEntries.map(({ employee, entries: employeeEntries }) => {
+          filteredAndGroupedEntries.map(({ employee, entries: employeeEntries }) => {
             if (!employee) return null;
             // Convert status to lowercase to match expected type
             const normalizedEntries = employeeEntries.map(entry => ({
               ...entry,
               status: entry.status.toLowerCase() as 'pending' | 'approved' | 'rejected'
             }));
-            
+
             return (
               employee && (
                 <EmployeeTimeEntries

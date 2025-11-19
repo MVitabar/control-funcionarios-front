@@ -1,10 +1,5 @@
 {
   "expo": {
-    "extra": {
-      "eas": {
-        "projectId": "a651b883-14e9-42ff-bac1-7a20de320c88"
-      }
-    },
     "name": "control-funcionarios",
     "slug": "control-funcionarios",
     "version": "1.0.0",
@@ -13,6 +8,11 @@
     "scheme": "controlfuncionarios",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "extra": {
+      "eas": {
+        "projectId": "a651b883-14e9-42ff-bac1-7a20de320c88"
+      }
+    },
     "updates": {
       "url": "https://u.expo.dev/a651b883-14e9-42ff-bac1-7a20de320c88",
       "enabled": true,
@@ -33,11 +33,11 @@
     },
     "android": {
       "package": "com.tudominio.controlfuncionarios",
+      "enableProguardInReleaseBuilds": true,
+      "enableShrinkResourcesInReleaseBuilds": true,
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#FFFFFF",
+        "foregroundImage": "./assets/images/launcher_icon.png"
       },
       "intentFilters": [
         {
@@ -66,7 +66,7 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/splash.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
